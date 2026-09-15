@@ -3,7 +3,7 @@ MATLAB library for analysis of CUMBIAH lander data.
 
 ## Introduction
 
-The CUMBIAH project deployed landers equipped with small clusters of 4 hydrophones. Each cluster can determine the 3D bearing to a received sound. The research focuses on the echolocation clicks of harbour porpoise: each lander can determine the 3D bearing to a porpoise, and if multiple distributed landers detect the same click then the bearings can be triangulated and the location of the porpoise estimated. This requires several steps. First, the location and orientation of each lander on the seabed needs to be determined. Then clicks from a porpoise need to be matched across landers, and finally a probabilistic tracking algorithm is applied to calculate the track of a porpoise over multiple clicks.
+The CUMBIAH project deployed landers equipped with small clusters of 4 hydrophones to track the position of porpoises. Each cluster can determine the 3D bearing to a received sound. The research focuses on the echolocation clicks of harbour porpoise: each lander can determine the 3D bearing to a porpoise, and if multiple distributed landers detect the same click then the bearings can be triangulated and the location of the porpoise estimated. This requires several steps. First, the location and orientation of each lander on the seabed needs to be determined. Then clicks from a porpoise need to be matched across landers, and finally a probabilistic tracking algorithm is applied to calculate the track of a porpoise over multiple clicks.
 
 ## Usage
 
@@ -11,17 +11,17 @@ The library has two main tasks: locate the landers, and then locate a porpoise a
 
 ### Locating the position and orientation of a lander array
 
-A lander rarely ends up exactly where it was dropped, and its heading, pitch and roll on the seabed are unknown. After each deployment the boat ran calibration lines over the landers making clicks. Each click gives a bearing at the lander, and the boat GPS tells us where the click was made, so the lander position and orientation that best explain the bearings can be found with a grid search.
+A lander rarely ends up exactly where it was dropped, and its heading, pitch and roll on the seabed are unknown. After each deployment the boat performed maneuvers over the landers with it's propeller producing cavitation transients that could be detected on the landers. Each transient gives a bearing at the lander, and the boat GPS tells us where the transient was made, so the lander position and orientation that best explain the bearings can be found with a grid search.
 
 The work is split into:
 
 | File | What it does |
 | --- | --- |
-| `locateplatform.m` | Function that does the calculation for one lander. Draws nothing - everything is returned in a `results` struct. |
-| `locate_platform.m` | Script that locates one lander and plots the diagnostics. |
-| `locate_array.m` | Script that locates several landers from one deployment and plots them together on the bathymetry. |
+| `locateplatform.m` | Function that does the calculation for one lander. Everything is returned in a `results` struct. |
+| `locate_platform.m` | Script that locates one lander and plots several diagnostic plots. |
+| `locate_array.m` | Script that locates several landers from one deployment and plots them together alongside bathymetry. |
 
-All three need the deployment helpers on the MATLAB path (`getlanderdeploymentinfo`, `getlanderdatapaths`, `getlandersuperfolder`), and `locate_array.m` also needs the Mapping Toolbox for the bathymetry.
+All functions need the library on the MATLAB path (`getlanderdeploymentinfo`, `getlanderdatapaths`, `getlandersuperfolder`), and `locate_array.m` also needs the Mapping Toolbox for the bathymetry.
 
 #### How the search works
 

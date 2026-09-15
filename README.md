@@ -21,8 +21,8 @@ The work is split into:
 | `locate_platform.m` | Script that locates one lander and plots several diagnostic plots. |
 | `locate_array.m` | Script that locates several landers from one deployment and plots them together alongside bathymetry. |
 
-All functions need the library on the MATLAB path (`getlanderdeploymentinfo`, `getlanderdatapaths`, `getlandersuperfolder`), and `locate_array.m` also needs the Mapping Toolbox for the bathymetry.
-
+ `locate_platform.m`  and `locate_array.m` scripts  need the library on the MATLAB path. They use `getlanderdeploymentinfo`, `getlanderdatapaths` and `getlandersuperfolder` to extract the correct PAMGuard database, binary files, drop location etc, to feed into the `locateplatform.m` function (the code that actually does the grid search). The Mapping Toolbox for the bathymetry. 
+ 
 #### How the search works
 
 `locateplatform` runs three passes:
@@ -136,8 +136,6 @@ load(bathyfile, 'bathy')
 The script prints the drop and calculated position and the heading/pitch/roll of each lander. It then plots them in metres east and north of the mean drop position. Open circles are the drop positions, filled circles the calculated positions, and the legend gives each lander's distance from its drop position and the distance between each pair of landers:
 
 ![Drop and calculated positions of the CUMBIAH landers, deployment 1](resources/lander_array_example.png)
-
-To force a lander's position (for example, when its calibration does not give a clean minimum), swap the `locateplatform` call in the loop for the `setlocation` form.
 
 ### Locating a porpoise
 

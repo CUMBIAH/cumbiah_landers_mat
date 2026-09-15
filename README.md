@@ -61,11 +61,11 @@ The script prints the heading (with its circular standard deviation), the fine l
 
 The fine chi2 surface (figure 7) for lander 3, deployment 1. The fine location lies in the minimum of the surface, about 20 m north of where the lander was dropped:
 
-![Fine chi2 grid search for lander 3](images/locate_platform_fine_grid.png)
+![Fine chi2 grid search for lander 3](resources/fine_grid_example.png)
 
 The corrected bearings (figure 9). The blue points are the geo-referenced click bearings measured by the lander and the orange line is the true bearing from the calculated lander position to the boat. If the location and orientation are right, the two overlay closely in both horizontal and vertical bearing:
 
-![Geo-referenced click bearings against the true bearings to the boat](images/locate_platform_bearings.png)
+![Geo-referenced click bearings against the true bearings to the boat](resources/bearings_cal_example.png)
 
 ##### `locateplatform` options
 
@@ -135,7 +135,7 @@ load(bathyfile, 'bathy')
 
 The script prints the drop and calculated position and the heading/pitch/roll of each lander. It then plots them in metres east and north of the mean drop position. Open circles are the drop positions, filled circles the calculated positions, and the legend gives each lander's distance from its drop position and the distance between each pair of landers:
 
-![Drop and calculated positions of the CUMBIAH landers, deployment 1](images/locate_array_map.png)
+![Drop and calculated positions of the CUMBIAH landers, deployment 1](resources/lander_array_example.png)
 
 To force a lander's position (for example, when its calibration does not give a clean minimum), swap the `locateplatform` call in the loop for the `setlocation` form.
 

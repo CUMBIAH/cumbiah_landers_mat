@@ -4,11 +4,11 @@ function results = locateplatform(data, varargin)
 %   RESULTS = LOCATEPLATFORM(DATA) works out where a CUMBIAH lander actually
 %   came to rest on the seabed, and which way up and round it is lying, from
 %   the vessel calibration lines run over it on the day it was deployed. DATA
-%   is one deployment record as returned by GETLANDERDATAPATHS - it supplies
+%   is one deployment record as returned by GETLANDERPATHS - it supplies
 %   the database, the binary store, the vessel GPS track and the drop
 %   position, so a lander is located by passing its record straight in:
 %
-%       data = getlanderdatapaths(8688, datetime(2024,10,6));
+%       data = getlanderpaths(8688, datetime(2024,10,6));
 %       results = locateplatform(data);
 %
 %   This function draws nothing. Everything the plots need is returned in
@@ -106,7 +106,7 @@ function results = locateplatform(data, varargin)
 %                        still fitted, as the offset in RTCOFFSET giving the
 %                        lowest chi2 at this location. Default [] (search).
 %
-%   See also LOCATE_PLATFORM, GETLANDERDATAPATHS, GETLANDERDEPLOYMENTINFO,
+%   See also LOCATE_PLATFORM, GETLANDERPATHS, GETLANDERDEPLOYMENTINFO,
 %   GRDSRCH_POS, GRDSRCH_POS_HPR, INTERPSRCLOC.
 
 % ---- options -----------------------------------------------------------
@@ -159,7 +159,7 @@ end
 % ---- unpack the deployment record --------------------------------------
 if isempty(data.landernumber)
     error('locateplatform:noDeployment', ...
-        ['DATA holds no deployment - GETLANDERDATAPATHS found no lander for ' ...
+        ['DATA holds no deployment - GETLANDERPATHS found no lander for ' ...
          'that serial number and time.']);
 end
 

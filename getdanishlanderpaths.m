@@ -1,9 +1,9 @@
-function data = getlanderdatapaths(serialnumber, time)
-%GETLANDERDATAPATHS Provides links to 4 channel soundtrap lander data for the
-%CUMBIAH project
+function data = getdanishlanderpaths(serialnumber, time)
+%GETDANISHLANDERPATHS Provides links to 4 channel soundtrap lander data for
+%the CUMBIAH Denmark landers
 %
-%   DATA = GETLANDERDATAPATHS(SERIALNUMBER,TIME) returns a struct DATA
-%   describing the CUMBIAH seabed lander carrying the SoundTrap 4c with ID
+%   DATA = GETDANISHLANDERPATHS(SERIALNUMBER,TIME) returns a struct DATA
+%   describing the CUMBIAH Denmark seabed lander carrying the SoundTrap 4c with ID
 %   SERIALNUMBER (e.g. 8690) at time TIME. TIME may be a datenum or a
 %   datetime. The struct has the following fields:
 %
@@ -67,15 +67,19 @@ function data = getlanderdatapaths(serialnumber, time)
 %
 %   If no deployment matches, a fully populated struct of neutral defaults is
 %   returned (see CUMBIAHDATADEFAULTS) so callers do not have to special case
-%   it. Check ISEMPTY(DATA.LANDERNUMBER) to detect that.
+%   it. Check ISEMPTY(DATA.LANDERNUMBER) to detect that. GETLANDERPATHS
+%   relies on this: it tries each country's function in turn and takes the
+%   first that finds the SoundTrap, so use GETLANDERPATHS rather than
+%   calling this directly unless you know the lander is Danish.
 %
 %   Example:
-%       [t0, ~, sn] = getlanderdeploymentinfo(1, 1);   % lander 1, Oct 24
-%       data = getlanderdatapaths(sn, t0);
+%       [t0, ~, sn] = getlanderdeploymentinfo(1, 1, 'Denmark');   % lander 1, Oct 24
+%       data = getdanishlanderpaths(sn, t0);
 %       clicks = import_clk_train(data.sqlitedB, data.binaryfolder, ...
 %           'eventtype', 'bc');
 %
-%   See also GETLANDERDEPLOYMENTINFO, CUMBIAHLANDERTABLE, CUMBIAHDATADEFAULTS.
+%   See also GETLANDERPATHS, GETDANISHLANDERDEPLOYMENTINFO, CUMBIAHLANDERTABLE,
+%   CUMBIAHDATADEFAULTS.
 
 % Ensure time is a datetime (accept datenum or datetime)
 time = cumbiahdatetime(time);
@@ -128,7 +132,7 @@ function data = cumbiahaddpaths(data)
 %   Only the root comes from elsewhere, via GETLANDERSUPERFOLDER, so the
 %   whole set follows the main folder between machines.
 
-d = getlandersuperfolder();
+d = getlandersuperfolder('Denmark');
 
 switch data.landernumber
 
@@ -196,7 +200,7 @@ switch data.landernumber
         data.sensorbinaryfolder = fullfile(d, 'lander9', 'pamguard', 'PAMBinary_sud_sensor');
 
     otherwise
-        error('getlanderdatapaths:unknownLander', ...
+        error('getdanishlanderpaths:unknownLander', ...
             'No paths defined for lander %d. Landers 1 to 9 are known.', ...
             data.landernumber);
 
@@ -218,7 +222,7 @@ function time = cumbiahdatetime(time)
 if isnumeric(time)
     time = datetime(time, 'ConvertFrom', 'datenum');
 elseif ~isdatetime(time)
-    error('getlanderdatapaths:badTime', 'TIME must be a datenum or datetime scalar.');
+    error('getdanishlanderpaths:badTime', 'TIME must be a datenum or datetime scalar.');
 end
 
 end

@@ -21,7 +21,7 @@ The work is split into:
 | `locate_platform.m` | Script that locates one lander and plots several diagnostic plots. |
 | `locate_array.m` | Script that locates several landers from one deployment and plots them together alongside bathymetry. |
 
- `locate_platform.m`  and `locate_array.m` scripts  need the library on the MATLAB path. They use `getlanderdeploymentinfo`, `getlanderdatapaths` and `getlandersuperfolder` to extract the correct PAMGuard database, binary files, drop location etc, to feed into the `locateplatform.m` function (the code that actually does the grid search). The Mapping Toolbox for the bathymetry. 
+ `locate_platform.m`  and `locate_array.m` scripts  need the library on the MATLAB path. They use `getlanderdeploymentinfo`, `getlanderpaths` and `getlandersuperfolder` to extract the correct PAMGuard database, binary files, drop location etc, to feed into the `locateplatform.m` function (the code that actually does the grid search). The Mapping Toolbox for the bathymetry. 
  
 #### How the search works
 
@@ -33,14 +33,15 @@ The work is split into:
 
 #### Locating a single lander: `locate_platform.m`
 
-Set the lander (1-9) and deployment (1 = Oct 24, 2 = Feb 25, 3 = June 25) at the top of the script and run it:
+Set the country, the lander and the deployment at the top of the script and run it. Lander and deployment numbers are per country; for Denmark the landers are 1-9 and the deployments 1 = Oct 24, 2 = Feb 25, 3 = June 25.
 
 ```matlab
+country      = 'Denmark';
 landernumber = 3;
 deployment   = 1;
 
-[startTime, ~, serialnumber] = getlanderdeploymentinfo(landernumber, deployment);
-data = getlanderdatapaths(serialnumber, startTime);
+[startTime, ~, serialnumber] = getlanderdeploymentinfo(landernumber, deployment, country);
+data = getlanderpaths(serialnumber, startTime);
 
 results = locateplatform(data, 'depth', 17, 'gridlims', [-40 40], 'gridcenter', data.droplocation);
 ```

@@ -1,21 +1,24 @@
 %Locate a sensor platform on the seabed from boat calibrations
 %
-% Pick a lander and a deployment, let GETLANDERDEPLOYMENTINFO and
-% GETLANDERDATAPATHS find the data, hand the record to LOCATEPLATFORM and
+% Pick a country, a lander and a deployment, let GETLANDERDEPLOYMENTINFO and
+% GETLANDERPATHS find the data, hand the record to LOCATEPLATFORM and
 % plot what comes back. The calculation itself lives in LOCATEPLATFORM,
 % which draws nothing - all the figures are here.
 clear
 clear global
 close all
 
-%which lander (1-9) and which deployment (1 = Oct 24, 2 = Feb 25,
-%3 = June 25). Not every lander was in every deployment - ask for one that
-%never happened and GETLANDERDEPLOYMENTINFO says which ones it does have.
+%which country, which lander and which deployment. Lander and deployment
+%numbers are per country - for Denmark, landers 1-9 and deployments
+%1 = Oct 24, 2 = Feb 25, 3 = June 25. Not every lander was in every
+%deployment - ask for one that never happened and GETLANDERDEPLOYMENTINFO
+%says which ones it does have.
+country      = 'Denmark';
 landernumber = 1;
 deployment   = 1;
 
-[startTime, ~, serialnumber] = getlanderdeploymentinfo(landernumber, deployment);
-data = getlanderdatapaths(serialnumber, startTime);
+[startTime, ~, serialnumber] = getlanderdeploymentinfo(landernumber, deployment, country);
+data = getlanderpaths(serialnumber, startTime);
 
 %LOCATEPLATFORM takes the calibration clicks from the deployment day, the
 %boat GPS track and the drop position straight out of DATA. The depth is not

@@ -3,8 +3,10 @@ function data = cumbiahdatadefaults()
 %
 %   DATA = CUMBIAHDATADEFAULTS() returns a struct with every field of a
 %   CUMBIAH lander deployment record set to a neutral default, so that
-%   GETLANDERDATAPATHS always hands back a fully populated struct whether or not
-%   it found a deployment.
+%   GETLANDERPATHS and every country's get*landerpaths function always hand
+%   back a fully populated struct whether or not they found a deployment.
+%   An empty LANDERNUMBER is how GETLANDERPATHS tells that a country's
+%   function did not know the SoundTrap.
 %
 %   Positions are decimal degrees, WGS84, latitude north positive and
 %   longitude EAST positive - the CUMBIAH landers are in the Danish Great
@@ -12,7 +14,7 @@ function data = cumbiahdatadefaults()
 %   longitude here is positive. Positions are always [lat lon] in that
 %   order, whichever way round the spreadsheet happened to write them.
 %
-%   See also GETLANDERDATAPATHS, GETLANDERDEPLOYMENTINFO, CUMBIAHLANDERTABLE.
+%   See also GETLANDERPATHS, GETLANDERDEPLOYMENTINFO, CUMBIAHLANDERTABLE.
 
 % ---- what and when -----------------------------------------------------
 data.landernumber        = [];    % 1-9
@@ -37,7 +39,7 @@ data.cpod                = [];
 
 % ---- data paths --------------------------------------------------------
 % One database and one binary store per lander, holding every deployment -
-% see GETLANDERDATAPATHS for the folder layout.
+% see GETDANISHLANDERPATHS for the folder layout.
 data.sqlitedB            = '';    % annotated database (the analysis one)
 data.rawsqlitedB         = '';    % database as written by PAMGuard
 data.binaryfolder        = '';    % PAMBinary (clicks etc.)

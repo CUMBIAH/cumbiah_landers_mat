@@ -23,11 +23,13 @@
 % recalculated when the landers, set locations or depth change, or when
 % RECALCULATE is true.
 %
-% See also LOCATE_PLATFORM, LOCATEPLATFORM, GETLANDERDATAPATHS.
+% See also LOCATE_PLATFORM, LOCATEPLATFORM, GETLANDERPATHS.
 clear
 close all
 
-%which deployment (1 = Oct 24, 2 = Feb 25, 3 = June 25) and which landers
+%which country, which deployment and which landers. Deployment and lander
+%numbers are per country - for Denmark, 1 = Oct 24, 2 = Feb 25, 3 = June 25
+country    = 'Denmark';
 deployment = 1;
 landers    = [1 2 3];
 
@@ -42,7 +44,7 @@ recalculate    = true; % force the localisation to be run again
 
 reextractbathy = false; % force the bathymetry to be cut out of the grid again
 
-denmarkdir  = getlandersuperfolder();
+denmarkdir  = getlandersuperfolder(country);
 bathygrid   = fullfile(denmarkdir, 'bathymetry', 'KattegatSouth', 'w001001.adf');
 bathyfile   = fullfile(denmarkdir, 'bathymetry', sprintf('lander_array_bathymetry_dep%d.mat', deployment));
 resultsfile = fullfile(denmarkdir, sprintf('lander_array_locations_dep%d.mat', deployment));
@@ -53,8 +55,8 @@ nlander = numel(landers);
 
 %the deployment records, for the drop positions and the GPS track
 for i = 1:nlander
-    [startTime, ~, serialnumber] = getlanderdeploymentinfo(landers(i), deployment);
-    data(i) = getlanderdatapaths(serialnumber, startTime);
+    [startTime, ~, serialnumber] = getlanderdeploymentinfo(landers(i), deployment, country);
+    data(i) = getlanderpaths(serialnumber, startTime);
 end
 
 dorecalc = recalculate || ~isfile(resultsfile);

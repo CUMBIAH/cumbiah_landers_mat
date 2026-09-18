@@ -1,79 +1,64 @@
 function [startTime, endTime, serialNumber, hydrophoneIDs] = ...
-    getlanderdeploymentinfo(landernumber, deploymentnumber)
+    getlanderdeploymentinfo(landernumber, deploymentnumber, country)
 %GETLANDERDEPLOYMENTINFO Deployment times and device IDs for one CUMBIAH lander.
 %
 %   [STARTTIME, ENDTIME, SERIALNUMBER, HYDROPHONEIDS] =
-%   GETLANDERDEPLOYMENTINFO(LANDERNUMBER, DEPLOYMENTNUMBER) returns the
-%   times and the instruments for one deployment of one seabed lander.
+%   GETLANDERDEPLOYMENTINFO(LANDERNUMBER, DEPLOYMENTNUMBER, COUNTRY) returns
+%   the times and the instruments for one deployment of one seabed lander in
+%   COUNTRY, one of 'Denmark', 'Germany' or 'Sweden' (case insensitive).
 %
-%   LANDERNUMBER is the lander, 1 to 9. DEPLOYMENTNUMBER is which of the
-%   three deployments of the array is wanted:
+%   COUNTRY is needed because lander and deployment numbers are only unique
+%   within a country - German lander 1 is not Danish lander 1. Each country
+%   has its own function that does the work:
 %
-%       1  Oct 24    deployed 2024-10-05, all nine landers
-%       2  Feb 25    deployed 2025-02-03, landers 1, 5, 7 and 8 only
-%       3  June 25   deployed 2025-06-26, every lander except 8
+%       Denmark   GETDANISHLANDERDEPLOYMENTINFO
+%       Germany   GETGERMANLANDERDEPLOYMENTINFO   (not implemented yet)
+%       Sweden    GETSWEDISHLANDERDEPLOYMENTINFO  (not implemented yet)
 %
 %   STARTTIME and ENDTIME bracket the recording period as a half open
 %   interval [STARTTIME, ENDTIME): STARTTIME is when the lander went over the
-%   side and ENDTIME when it was recovered. This matches the windows used by
-%   GETLANDERDATAPATHS, so a value TIME satisfies STARTTIME <= TIME < ENDTIME
-%   exactly when GETLANDERDATAPATHS resolves to this deployment.
+%   side and ENDTIME when it was recovered. SERIALNUMBER is the ID of the
+%   SoundTrap 4c on that lander (e.g. 8690), and is unique across the whole
+%   project, so STARTTIME and SERIALNUMBER can be passed straight to
+%   GETLANDERPATHS without saying the country again. HYDROPHONEIDS is a 4x1
+%   vector of hydrophone serials indexed by channel.
 %
-%   SERIALNUMBER is the ID of the SoundTrap 4c on that lander (e.g. 8690).
-%   Each lander kept the same SoundTrap for all three deployments, so unlike
-%   the CIBBRiNA trips the serial number identifies the lander rather than
-%   the deployment - which is why GETLANDERDATAPATHS needs a time as well.
-%
-%   HYDROPHONEIDS is a 4x1 vector of hydrophone serials indexed by position
-%   on the SoundTrap, i.e. HYDROPHONEIDS(2) is the hydrophone on channel 2.
-%   The hydrophones stayed on their landers too, so this is normally the same
-%   across deployments; it is read per deployment rather than assumed.
-%
-%   Not every lander was in every deployment: only 1, 5, 7 and 8 were
-%   redeployed in Feb 25, and lander 8 never released in June 25 and so has
-%   no deployment 3. Asking for a combination that never happened is an
-%   error, which lists the deployments that lander does have.
-%
-%   Everything here is read from the lander settings spreadsheet rather than
-%   held in this file - see CUMBIAHLANDERTABLE.
+%   To add a country, write its get*landerdeploymentinfo function with the
+%   same inputs and outputs as GETDANISHLANDERDEPLOYMENTINFO and add a case
+%   for it below.
 %
 %   Example:
-%       [t0, t1, sn] = getlanderdeploymentinfo(1, 2);   % lander 1, Feb 25
-%       data = getlanderdatapaths(sn, t0);            % data.sqlitedB, ...
+%       [t0, t1, sn] = getlanderdeploymentinfo(1, 2, 'Denmark');   % Feb 25
+%       data = getlanderpaths(sn, t0);                           % data.sqlitedB, ...
 %
-%   See also GETLANDERDATAPATHS, CUMBIAHLANDERTABLE.
+%   See also GETLANDERPATHS, GETDANISHLANDERDEPLOYMENTINFO,
+%   GETGERMANLANDERDEPLOYMENTINFO, GETSWEDISHLANDERDEPLOYMENTINFO.
 
-narginchk(2, 2);
-if ~isnumeric(landernumber) || ~isscalar(landernumber)
-    error('getlanderdeploymentinfo:badLander', 'LANDERNUMBER must be a scalar, e.g. 1.');
-end
-if ~isnumeric(deploymentnumber) || ~isscalar(deploymentnumber)
-    error('getlanderdeploymentinfo:badDeployment', ...
-        'DEPLOYMENTNUMBER must be a scalar: 1 (Oct 24), 2 (Feb 25) or 3 (June 25).');
+narginchk(3, 3);
+if ~(ischar(country) || (isstring(country) && isscalar(country)))
+    error('getlanderdeploymentinfo:badCountry', ...
+        'COUNTRY must be ''Denmark'', ''Germany'' or ''Sweden''.');
 end
 
-T = cumbiahlandertable();
+switch lower(char(country))
 
-idx = find([T.landernumber] == landernumber & [T.deployment] == deploymentnumber, 1);
+    case 'denmark'
+        [startTime, endTime, serialNumber, hydrophoneIDs] = ...
+            getdanishlanderdeploymentinfo(landernumber, deploymentnumber);
 
-if isempty(idx)
-    % say what this lander does have rather than just that this is missing -
-    % the gaps (no Feb 25 for most landers, no June 25 for lander 8) are real
-    % and easily forgotten
-    onthislander = unique([T([T.landernumber] == landernumber).deployment]);
-    if isempty(onthislander)
-        error('getlanderdeploymentinfo:unknownLander', ...
-            'No lander %d in the settings spreadsheet. Landers present: %s.', ...
-            landernumber, mat2str(unique([T.landernumber])));
-    end
-    error('getlanderdeploymentinfo:notDeployed', ...
-        'Lander %d was not deployed in deployment %d. It has deployments: %s.', ...
-        landernumber, deploymentnumber, mat2str(onthislander));
+    case 'germany'
+        [startTime, endTime, serialNumber, hydrophoneIDs] = ...
+            getgermanlanderdeploymentinfo(landernumber, deploymentnumber);
+
+    case 'sweden'
+        [startTime, endTime, serialNumber, hydrophoneIDs] = ...
+            getswedishlanderdeploymentinfo(landernumber, deploymentnumber);
+
+    otherwise
+        error('getlanderdeploymentinfo:unknownCountry', ...
+            'Unknown country ''%s''. Known countries: Denmark, Germany, Sweden.', ...
+            char(country));
+
 end
-
-startTime     = T(idx).startTime;
-endTime       = T(idx).endTime;
-serialNumber  = T(idx).serialnumber;
-hydrophoneIDs = T(idx).hydrophoneIDs;
 
 end

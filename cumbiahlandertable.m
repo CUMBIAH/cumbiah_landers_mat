@@ -5,7 +5,7 @@ function T = cumbiahlandertable(refresh)
 %   (lander, deployment) pair actually deployed, read out of the lander
 %   settings spreadsheet in the Denmark folder. Each element carries the
 %   fields listed in CUMBIAHDATADEFAULTS except the data paths, which are
-%   added by GETLANDERDATAPATHS.
+%   added by GETDANISHLANDERPATHS.
 %
 %   T = CUMBIAHLANDERTABLE(true) forces a re-read. The spreadsheet is
 %   otherwise read once and cached, because reading it is slow (it is 30 MB)
@@ -46,7 +46,8 @@ function T = cumbiahlandertable(refresh)
 %   writes it as a ten second range ('06:22:30-06:22:40') and the start of
 %   that range is used.
 %
-%   See also GETLANDERDATAPATHS, GETLANDERDEPLOYMENTINFO, CUMBIAHDATADEFAULTS.
+%   See also GETDANISHLANDERPATHS, GETDANISHLANDERDEPLOYMENTINFO,
+%   CUMBIAHDATADEFAULTS.
 
 persistent cached
 
@@ -99,7 +100,7 @@ function f = cumbiahsettingsfile()
 %   ('Lander settings LKY_PBJ 2026-01-08.xlsx'), so match on the stem and
 %   take the most recently modified. Excel lock files ('~$...') are skipped.
 
-denmarkdir = getlandersuperfolder();
+denmarkdir = getlandersuperfolder('Denmark');
 d = dir(fullfile(denmarkdir, 'Lander settings*.xlsx'));
 d = d(~startsWith({d.name}, '~$'));
 

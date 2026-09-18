@@ -5,10 +5,11 @@
 
 clear
 
+country    = 'Denmark';
 landers    = [1 2 3];
 deployment = 1; 
 
-denmarkdir  = getlandersuperfolder();
+denmarkdir  = getlandersuperfolder(country);
 
 nlander = numel(landers);
 
@@ -16,8 +17,8 @@ nlander = numel(landers);
 
 %the deployment records, for the drop positions and the GPS track
 for i = 1:nlander
-    [startTime, ~, serialnumber] = getlanderdeploymentinfo(landers(i), deployment);
-    data(i) = getlanderdatapaths(serialnumber, startTime);
+    [startTime, ~, serialnumber] = getlanderdeploymentinfo(landers(i), deployment, country);
+    data(i) = getlanderpaths(serialnumber, startTime);
 
     binaryfolder = [data(i).binaryfolder 'sud_sensor'];
 

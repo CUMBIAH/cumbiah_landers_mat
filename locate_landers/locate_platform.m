@@ -14,7 +14,7 @@ close all
 %deployment - ask for one that never happened and GETLANDERDEPLOYMENTINFO
 %says which ones it does have.
 country      = 'Denmark';
-landernumber = 1;
+landernumber = 2;
 deployment   = 1;
 
 [startTime, ~, serialnumber] = getlanderdeploymentinfo(landernumber, deployment, country);
@@ -25,7 +25,7 @@ data = getlanderpaths(serialnumber, startTime);
 %in the spreadsheet so it is passed here.
 % results = locateplatform(data, 'depth', 17, 'setlocation', [54.747839655666297, 12.533771685747112]);
 % results = locateplatform(data, 'depth', 17);
- results = locateplatform(data, 'depth', 17, 'gridlims', [-40 40], 'gridcenter', data.droplocation);
+ results = locateplatform(data, 'depth', 17, 'gridlims', [-50 50], 'gridcenter', data.droplocation);
 
 
 %pull the results apart for plotting

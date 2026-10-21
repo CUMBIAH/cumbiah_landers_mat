@@ -22,6 +22,9 @@ function data = getdanishlanderpaths(serialnumber, time)
 %       cpod               - CPOD serial on the lander
 %       sqlitedB           - annotated PAMGuard database (the analysis one)
 %       rawsqlitedB        - database as written by PAMGuard
+%       porpoisedB         - database the porpoise bearing tracks are written
+%                            to by CUMBIAH_MULTITRACK and read from by
+%                            LOCALISEPORPOISES (..._porpoise.sqlite3)
 %       binaryfolder       - PAMGuard binary store (clicks etc.)
 %       sensorbinaryfolder - binary store of the SoundTrap sensor data
 %       psfxfile           - PAMGuard configuration
@@ -38,6 +41,7 @@ function data = getdanishlanderpaths(serialnumber, time)
 %
 %       lander<N>/
 %           lander<N>_Denmark_database_annotated.sqlite3   <- sqlitedB
+%           lander<N>_Denmark_database_porpoise.sqlite3    <- porpoisedB
 %           pamguard/
 %               lander<N>_Denmark_database.sqlite3         <- rawsqlitedB
 %               Lander<N>_Denmark.psfx                     <- psfxfile
@@ -138,6 +142,7 @@ switch data.landernumber
 
     case 1
         data.sqlitedB           = fullfile(d, 'lander1', 'lander1_Denmark_database_annotated.sqlite3');
+        data.porpoisedB         = fullfile(d, 'lander1', 'lander1_Denmark_database_porpoise.sqlite3');
         data.rawsqlitedB        = fullfile(d, 'lander1', 'pamguard', 'lander1_Denmark_database.sqlite3');
         data.psfxfile           = fullfile(d, 'lander1', 'pamguard', 'Lander1_Denmark.psfx');
         data.binaryfolder       = fullfile(d, 'lander1', 'pamguard', 'PAMBinary');
@@ -145,6 +150,7 @@ switch data.landernumber
 
     case 2
         data.sqlitedB           = fullfile(d, 'lander2', 'pamguard', 'lander2_Denmark_database_annotated.sqlite3');
+        data.porpoisedB         = fullfile(d, 'lander2', 'pamguard', 'lander2_Denmark_database_porpoise.sqlite3');
         data.rawsqlitedB        = fullfile(d, 'lander2', 'pamguard', 'lander2_Denmark_database.sqlite3');
         data.psfxfile           = fullfile(d, 'lander2', 'pamguard', 'Lander2_Denmark.psfx');
         data.binaryfolder       = fullfile(d, 'lander2', 'pamguard', 'PAMBinary');
@@ -152,6 +158,7 @@ switch data.landernumber
 
     case 3
         data.sqlitedB           = fullfile(d, 'lander3', 'pamguard', 'lander3_Denmark_database_annotated.sqlite3');
+        data.porpoisedB         = fullfile(d, 'lander3', 'pamguard', 'lander3_Denmark_database_porpoise.sqlite3');
         data.rawsqlitedB        = fullfile(d, 'lander3', 'pamguard', 'lander3_Denmark_database.sqlite3');
         data.psfxfile           = fullfile(d, 'lander3', 'pamguard', 'Lander3_Denmark.psfx');
         data.binaryfolder       = fullfile(d, 'lander3', 'pamguard', 'PAMBinary');
@@ -159,6 +166,7 @@ switch data.landernumber
 
     case 4
         data.sqlitedB           = fullfile(d, 'lander4', 'lander4_Denmark_database_annotated.sqlite3');
+        data.porpoisedB         = fullfile(d, 'lander4', 'lander4_Denmark_database_porpoise.sqlite3');
         data.rawsqlitedB        = fullfile(d, 'lander4', 'pamguard', 'lander4_Denmark_database.sqlite3');
         data.psfxfile           = fullfile(d, 'lander4', 'pamguard', 'Lander4_Denmark.psfx');
         data.binaryfolder       = fullfile(d, 'lander4', 'pamguard', 'PAMBinary');
@@ -166,6 +174,7 @@ switch data.landernumber
 
     case 5
         data.sqlitedB           = fullfile(d, 'lander5', 'lander5_Denmark_database_annotated.sqlite3');
+        data.porpoisedB         = fullfile(d, 'lander5', 'lander5_Denmark_database_porpoise.sqlite3');
         data.rawsqlitedB        = fullfile(d, 'lander5', 'pamguard', 'lander5_Denmark_database.sqlite3');
         data.psfxfile           = fullfile(d, 'lander5', 'pamguard', 'Lander5_Denmark.psfx');
         data.binaryfolder       = fullfile(d, 'lander5', 'pamguard', 'PAMBinary');
@@ -173,6 +182,7 @@ switch data.landernumber
 
     case 6
         data.sqlitedB           = fullfile(d, 'lander6', 'lander6_Denmark_database_annotated.sqlite3');
+        data.porpoisedB         = fullfile(d, 'lander6', 'lander6_Denmark_database_porpoise.sqlite3');
         data.rawsqlitedB        = fullfile(d, 'lander6', 'pamguard', 'lander6_Denmark_database.sqlite3');
         data.psfxfile           = fullfile(d, 'lander6', 'pamguard', 'Lander6_Denmark.psfx');
         data.binaryfolder       = fullfile(d, 'lander6', 'pamguard', 'PAMBinary');
@@ -180,6 +190,7 @@ switch data.landernumber
 
     case 7
         data.sqlitedB           = fullfile(d, 'lander7', 'lander7_Denmark_database_annotated.sqlite3');
+        data.porpoisedB         = fullfile(d, 'lander7', 'lander7_Denmark_database_porpoise.sqlite3');
         data.rawsqlitedB        = fullfile(d, 'lander7', 'pamguard', 'lander7_Denmark_database.sqlite3');
         data.psfxfile           = fullfile(d, 'lander7', 'pamguard', 'Lander7_Denmark.psfx');
         data.binaryfolder       = fullfile(d, 'lander7', 'pamguard', 'PAMBinary');
@@ -187,6 +198,7 @@ switch data.landernumber
 
     case 8
         data.sqlitedB           = fullfile(d, 'lander8', 'lander8_Denmark_database_annotated.sqlite3');
+        data.porpoisedB         = fullfile(d, 'lander8', 'lander8_Denmark_database_porpoise.sqlite3');
         data.rawsqlitedB        = fullfile(d, 'lander8', 'pamguard', 'lander8_Denmark_database.sqlite3');
         data.psfxfile           = fullfile(d, 'lander8', 'pamguard', 'Lander8_Denmark.psfx');
         data.binaryfolder       = fullfile(d, 'lander8', 'pamguard', 'PAMBinary');
@@ -194,6 +206,7 @@ switch data.landernumber
 
     case 9
         data.sqlitedB           = fullfile(d, 'lander9', 'lander9_Denmark_database_annotated.sqlite3');
+        data.porpoisedB         = fullfile(d, 'lander9', 'lander9_Denmark_database_porpoise.sqlite3');
         data.rawsqlitedB        = fullfile(d, 'lander9', 'pamguard', 'lander9_Denmark_database.sqlite3');
         data.psfxfile           = fullfile(d, 'lander9', 'pamguard', 'Lander9_Denmark.psfx');
         data.binaryfolder       = fullfile(d, 'lander9', 'pamguard', 'PAMBinary');

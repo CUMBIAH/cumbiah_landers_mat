@@ -140,7 +140,59 @@ The script prints the drop and calculated position and the heading/pitch/roll of
 
 ### Locating a porpoise
 
-To be added.
+#### Bearing tracks on a single lander: `cumbiah_multitrack.m`
+
+`track_porpoises/cumbiah_multitrack.m` cuts the porpoise clicks of one lander deployment into encounters, groups the clicks of each encounter into bearing tracks (one per animal) and writes the tracks as `pp` events to a PAMGuard database, where they can be checked and edited in the viewer. The tracking code itself is in `soundnetloc_mat/click_train_tracking` (`find_encounters`, `track_bearings`, `write_track_events`, `plot_bearing_tracks`).
+
+Set the lander and the database at the top of the script:
+
+```matlab
+country      = 'Denmark';
+landernumber = 1;
+deployment   = 1;
+
+trackdb   = data.porpoisedB;   % the lander's ..._porpoise.sqlite3 database; must exist
+writedb   = true;    % write the tracks to trackdb
+overwrite = false;   % false = stop if trackdb already has tracks of this deployment
+```
+
+The tracks go to the lander's `*_porpoise.sqlite3` database, `data.porpoisedB` in the record from `getlanderpaths`. It has to exist already (a copy of the annotated database is the usual choice). Track codes are stored in the event comment, e.g. `PP1003AB01` is deployment 1, encounter 3, track AB. The bearings are left relative to the lander; its orientation is applied later, when the tracks are located. A `.mat` of the encounters and a figure of each encounter are saved in `<lander folder>/multitrack`.
+
+#### Matching, time aligning and localising across the array: `localise_porpoises.m`
+
+`localise_porpoises/localise_porpoises.m` brings the two steps above together. Run it after `locate_array.m` and after `cumbiah_multitrack.m` has been run for every lander of the array. The work is split as for locating the landers:
+
+| File | What it does |
+| --- | --- |
+| `localiseporpoises.m` | Function that matches the tracks, time aligns the landers and localises the animals. |
+| `localise_porpoises.m` | Script that builds the inputs for one array and calls it. |
+| `plot_loctrack_landers.m` | Plots localised tracks, coloured by time, over the bathymetry with the landers. |
+
+The inputs are a cell array of two or more (usually three) deployment records, one per lander, and the `.mat` file saved by `locate_array.m`:
+
+```matlab
+for i = 1:3
+    [t0, ~, sn] = getlanderdeploymentinfo(i, 1, 'Denmark');
+    data{i} = getlanderpaths(sn, t0);
+end
+arrayfile = fullfile(getlandersuperfolder('Denmark'), 'lander_array_locations_dep1.mat');
+
+[loctracks, info] = localiseporpoises(data, arrayfile);                   % everything
+[loctracks, info] = localiseporpoises(data, arrayfile, 'encounters', 3:5); % three encounters
+[~, info] = localiseporpoises(data, arrayfile, 'localise', false);        % clocks and matching only (quick)
+```
+
+What it does:
+
+1. **Tracks.** The tracks of the deployment are read back from each lander's `data.porpoisedB`, so analyst edits in the PAMGuard viewer are used. Tracks during the boat calibration (`bc` events) are left out.
+2. **Encounters.** Runs of tracks on any lander with no gap of more than 5 minutes; those with tracks on two or more landers are kept and coded `PA1001`, `PA1002`, ... (deployment 1). The `PP` codes of `cumbiah_multitrack.m` are per lander and are not used for matching.
+3. **Clocks.** A comb filter between the click times of each pair of landers gives the clock offset of every lander from the first one. It is done twice: a wide search following the offset from encounter to encounter, a line fitted to those offsets (the clocks drift apart steadily), then a narrow search around the line. The `rtctimeoffset` of `locateplatform` is not used.
+4. **Matching.** Each pair of landers is associated with `associate_tracks` (bearings must cross, click times must line up); tracks joined through any pair are one animal, e.g. `PA1003AB`.
+5. **Localisation.** The hydrophones of each lander are rotated by its heading, pitch and roll and put at its position, and each association is run through the particle filter (`trackstartloc_bounded`, `partice_filter_pam`). A track fragment needs clicks on at least two landers.
+
+Results go to `<lander super folder>/localisation`: `landers123_dep1_loctracks.mat` (the tracks, with the clock offsets and associations of every encounter), a figure of the tracks of each encounter over the bathymetry coloured by time, a figure of the matched bearing tracks of each encounter, and `landers123_dep1_clock.png`, the clock offsets through the deployment. See `help localiseporpoises` for the options and the fields of `loctracks`.
+
+As well as the CUMBIAH library, soundnet and PAMGUARD this needs the CIBBRiNA `soundtrap_4c/localisation` code and the particle filter (`MATLAB/localisation`) on the path.
 
 ## License
 This library is open source but it is constantly evolving. It is for the research use of the CUMBIAH project but can be copied, adapted and used as per the open source license. We will not provide support outside of CUMBIAH.

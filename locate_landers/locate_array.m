@@ -38,7 +38,7 @@ depth = 17;             % depth of the landers (m), passed to LOCATEPLATFORM
 boxsize    = 1000;      % bathymetry kept either side of the landers is boxsize/2 (m)
 zexag      = 100;       % vertical exaggeration - the seabed here varies by ~1 m per km
 plotradius = 300;       % plot +/- this many m around the landers, Inf for all the bathymetry
-plotgps    = false;      % plot the boat track over the landers
+plotgps    = true;      % plot the boat track over the landers
 
 recalculate    = true; % force the localisation to be run again
 

@@ -42,6 +42,7 @@ data.cpod                = [];
 % see GETDANISHLANDERPATHS for the folder layout.
 data.sqlitedB            = '';    % annotated database (the analysis one)
 data.rawsqlitedB         = '';    % database as written by PAMGuard
+data.porpoisedB          = '';    % database holding the porpoise bearing tracks
 data.binaryfolder        = '';    % PAMBinary (clicks etc.)
 data.sensorbinaryfolder  = '';    % PAMBinary_sud_sensor (SoundTrap sensors)
 data.psfxfile            = '';    % PAMGuard configuration

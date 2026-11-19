@@ -6,8 +6,6 @@ function [loctracks, info] = localiseporpoises(landers, arrayfile, varargin)
 %   (CUMBIAH_MULTITRACK) together: the tracks of each lander are matched
 %   between the landers, the clocks of the landers are lined up with a comb
 %   filter and the matched tracks are localised with the particle filter.
-%   It is iceland_localise.m and cornwall_localise.m, and the association
-%   half of their multitrack scripts, for two or more landers on the seabed.
 %
 %   LANDERS is a cell array of two or more (usually three) deployment
 %   records, one per lander of the array, as returned by GETLANDERPATHS.
@@ -123,7 +121,11 @@ function [loctracks, info] = localiseporpoises(landers, arrayfile, varargin)
 %       clockoffset   - clock of each lander - reference lander (s)
 %
 %   INFO holds the encounters, the landers, the clock lines, the seabed
-%   mesh, the settings and NOSTART.
+%   mesh, the settings and NOSTART, and in INFO.CLICKS, one element per
+%   lander, every click of the tracks inside TLIMS: t (datenum, the
+%   lander's own clock - subtract the encounter's CLOCKOFFSET/86400 for the
+%   reference clock), trackcode, bearing and slant (deg, true north,
+%   positive up) and uvec (unit vector, east north up).
 %
 %   Name-value options (defaults in brackets):
 %
@@ -162,13 +164,34 @@ function [loctracks, info] = localiseporpoises(landers, arrayfile, varargin)
 %       'mincombpeak'  - click pairs in the peak for a clear peak [15]
 %
 %     matching
+%       'minslant'     - clicks with a true slant angle below this (deg,
+%                        negative down) are left out: the landers are on
+%                        the seabed, so they cannot hear a porpoise below
+%                        them [-10]
 %       'trackwindow'  - window the bearings of a track are averaged in (s) [2]
 %       'assocargs'    - name-value arguments of ASSOCIATE_TRACKS
 %                        [maxRange 500, crossTol 10, crossFrac 0.5,
 %                        delayTol 0.002, minMatches 5, timingP 0.01]
 %
 %     particle filter
-%       'soundspeed'   - (m/s) [1500]
+%       'soundspeed'   - (m/s) [1500]. Not used where 'propagation' gives one
+%       'propagation'  - how sound travels from a porpoise to the landers.
+%                        A propagation struct, or a struct array or cell
+%                        array of them, in which case the one closest in
+%                        time to each encounter is used (SELECT_PROPAGATION):
+%                          - a ray traced lookup table of a CTD cast
+%                            (MAKE_PROPAGATION_TABLE): the time delays are
+%                            predicted from the direction each click really
+%                            arrives from, so refraction is allowed for
+%                          - a time and a single sound speed
+%                            (STRAIGHT_PROPAGATION): straight lines
+%                        Its SOUNDSPEED (at the landers) replaces
+%                        'soundspeed' for the matching and the particle
+%                        filter. [] for straight lines at 'soundspeed' [[]]
+%       'propagationmatch' - how the propagation of an encounter is chosen
+%                        from several: 'time', the closest in time, or
+%                        'season', the closest in time of year, whatever
+%                        the year (SELECT_PROPAGATION) ['time']
 %       'stdaccel'     - st dev of acceleration of the movement model [0.5]
 %       'maxspeed'     - (m/s) [4]
 %       'nruns'        - runs of the particle filter [5]
@@ -220,10 +243,13 @@ p.addParameter('maxoffset', 5);
 p.addParameter('maxresidual', 0.25);
 p.addParameter('mincombsnr', 3);
 p.addParameter('mincombpeak', 15);
+p.addParameter('minslant', -10);
 p.addParameter('trackwindow', 2);
 p.addParameter('assocargs', {'maxRange', 500, 'crossTol', 10, 'crossFrac', 0.5, ...
     'delayTol', 0.002, 'minMatches', 5, 'timingP', 0.01});
 p.addParameter('soundspeed', 1500);
+p.addParameter('propagation', []);
+p.addParameter('propagationmatch', 'time');
 p.addParameter('stdaccel', 0.5);
 p.addParameter('maxspeed', 4);
 p.addParameter('nruns', 5);
@@ -381,18 +407,27 @@ for d = 1:nl
     renumber = zeros(numel(T.code), 1);
     renumber(keep) = 1:numel(keep);
     in = renumber(T.track) > 0;
+    % the bearings of the clicks, referenced to true north with the
+    % orientation of the lander (deg). A lander is on the seabed, so a
+    % click from more than -MINSLANT below the horizontal is not a porpoise
+    % (a reflection, or a bad time delay) and is left out.
+    [b, ned] = rotate_bearings(pamguard_bearings(T.angles(in,:)), dev(d).hpr);
+    low = rad2deg(b(:,2)) < opt.minslant;
+    index = find(in);
+    in(index(low)) = false;
+    b = b(~low,:);
+    ned = ned(~low,:);
     dev(d).t = T.t(in);
     dev(d).track = renumber(T.track(in));
     dev(d).delays = T.delays(in,:);
     dev(d).tderr = T.tderr(in);
     dev(d).code = T.code(keep);
     dev(d).tracklims = T.tracklims(keep,:);
-    % the bearings of the clicks, referenced to true north with the
-    % orientation of the lander (deg)
-    b = rotate_bearings(pamguard_bearings(T.angles(in,:)), dev(d).hpr);
     dev(d).bearing = rad2deg(b(:,1));
-    fprintf('%s: %d tracks, %d clicks (%d tracks left out as the boat)\n', dev(d).name, numel(keep), ...
-        sum(in), sum(isboat));
+    dev(d).slant = rad2deg(b(:,2));
+    dev(d).uvec = [ned(:,2), ned(:,1), -ned(:,3)]; % unit vector of each click, east north up
+    fprintf(['%s: %d tracks, %d clicks (%d tracks left out as the boat, %d clicks below %g deg ' ...
+        'slant)\n'], dev(d).name, numel(keep), sum(in), sum(isboat), sum(low), opt.minslant);
 end
 
 % ---- encounters --------------------------------------------------------
@@ -478,6 +513,11 @@ for k = encounters
     end
     fprintf('\n');
 
+    % how sound travels in this encounter: the propagation closest in time
+    [~, propname, csound, delayfun] = encounter_propagation(opt.propagation, tenc(1), opt.soundspeed, ...
+        opt.propagationmatch);
+    fprintf('Propagation: %s\n', propname);
+
     % the clicks of the encounter on each lander, on the reference clock,
     % as the output of TRACK_BEARINGS so they can go to ASSOCIATE_TRACKS
     clear ed
@@ -504,7 +544,7 @@ for k = encounters
     edges = zeros(0, 2);
     for i = present
         for j = present(present > i)
-            assoc = associate_tracks(ed([i j]), opt.assocargs{:}, 'soundSpeed', opt.soundspeed, ...
+            assoc = associate_tracks(ed([i j]), opt.assocargs{:}, 'soundSpeed', csound, ...
                 'offset', 0, 'maxOffset', 0.05);
             for g = 1:numel(assoc.groups)
                 nodes = [first(i) + assoc.groups(g).tracks{1}(:); first(j) + assoc.groups(g).tracks{2}(:)];
@@ -608,7 +648,7 @@ for k = encounters
             [startlocation, index, startinfo] = trackstartloc_bounded(F.timessrt, F.timedelaysobs, ...
                 F.timedelayserr, F.hydrophonesgeo, 'bathymetry', meshdata, 'maxRange', opt.maxstartrange, ...
                 'minRange', opt.minstartrange, 'clampDepth', true, 'constraints', opt.startconstraints, ...
-                'soundSpeed', opt.soundspeed);
+                'soundSpeed', csound, 'delayFunction', delayfun);
             toofew = ~isempty(startlocation) && numel(F.timessrt) - index + 1 < opt.minstartclicks;
             if isempty(startlocation) || toofew
                 why = startinfo.reason;
@@ -644,7 +684,7 @@ for k = encounters
                     'F.timedelaysobs(use,:), F.hydrophonesgeo(use,:), startlocation, ' ...
                     '''TimeDelayErrors'', F.timedelayserr(use,:), ''Bathymetry'', meshdata, ' ...
                     '''StdAccel'', opt.stdaccel, ''MaxSpeed'', opt.maxspeed, ''SoundSpeed'', ' ...
-                    'opt.soundspeed, ''Particles'', opt.particles)']);
+                    'csound, ''Particles'', opt.particles, ''DelayFunction'', delayfun)']);
                 % spread of the particles in x, y and z
                 err(:,:,ii) = squeeze(std(pf.particles(1:3,:,:), 0, 2));
                 clear pf
@@ -667,6 +707,8 @@ for k = encounters
             L.dateend = tenc(2);
             L.reflatlon = reflatlon;
             L.clockoffset = enc(k).clockoffset; % lander - reference lander (s)
+            L.propagation = propname;          % how the time delays were predicted
+            L.soundspeed = csound;              % sound speed at the landers (m/s)
             enctracks = [enctracks, L]; %#ok<AGROW>
             fprintf(['  fragment %d: landers %s, %d clicks, %.0f s, start by %s, median range %.0f m, ' ...
                 'depth %.0f m, particle spread %.0f m (%.0f s to run)\n'], i, num2str(L.landers), ...
@@ -703,7 +745,8 @@ end
 
 % ---- save --------------------------------------------------------------
 settings = rmfield(opt, {'encounters', 'outfolder', 'bathyfile', 'savefigs', 'usecache', 'localise', ...
-    'clockprior'});
+    'clockprior', 'propagation'});
+settings.propagation = propagation_summary(opt.propagation); % the tables themselves are not kept
 settings.created = datestr(now, 'yyyy-mm-dd HH:MM:SS');
 settings.deployment = deployment;
 settings.landers = [dev.number];
@@ -725,7 +768,12 @@ settings.conventions = ['times are datenum on the first lander''s clock; clockof
 settings.encounters = encounters;           % the encounters run this time
 
 info.encounters = enc;
-info.landers = rmfield(dev, {'data', 't', 'track', 'delays', 'tderr', 'bearing'});
+info.landers = rmfield(dev, {'data', 't', 'track', 'delays', 'tderr', 'bearing', 'slant', 'uvec'});
+% the clicks of the tracks inside TLIMS on each lander, with their true
+% bearings, for plots of the bearings against the localised tracks
+info.clicks = struct('lander', {dev.number}, 't', {dev.t}, 'trackcode', ...
+    cellfun(@(c, k) c(k), {dev.code}, cellfun(@(k) k(:), {dev.track}, 'UniformOutput', false), ...
+    'UniformOutput', false), 'bearing', {dev.bearing}, 'slant', {dev.slant}, 'uvec', {dev.uvec});
 info.clockline = clockline;
 info.clockpass1 = pass1;
 info.meshdata = meshdata;
@@ -768,6 +816,56 @@ if opt.savefigs
     fprintf('Figures saved in %s\n', outfolder);
 end
 
+end
+
+%% ------------------------------------------------------------------------
+function S = propagation_summary(props)
+% type, time, sound speed and source of each propagation struct
+S = struct('type', {}, 'time', {}, 'soundspeed', {}, 'source', {});
+if isempty(props)
+    return
+end
+if isstruct(props)
+    props = num2cell(props);
+end
+for i = 1:numel(props)
+    P = props{i};
+    S(i).type = 'straight';
+    if isfield(P, 'type'), S(i).type = P.type; end
+    S(i).time = NaT;
+    if isfield(P, 'time'), S(i).time = P.time; end
+    S(i).soundspeed = P.soundspeed;
+    S(i).source = '';
+    if isfield(P, 'source'), S(i).source = P.source; end
+end
+end
+
+%% ------------------------------------------------------------------------
+function [P, name, c, delayfun] = encounter_propagation(props, t, soundspeed, match)
+% the propagation of an encounter starting at T (datenum): the struct of
+% PROPS closest in time, its description, the sound speed at the landers
+% and the time delay function of the particle filter ([] for straight
+% lines, which the particle filter does itself)
+if isempty(props)
+    P = straight_propagation(NaT, soundspeed);
+else
+    P = select_propagation(props, t, match);
+end
+c = P.soundspeed;
+if isfield(P, 'type') && strcmp(P.type, 'raytrace')
+    delayfun = propagation_delays(P);
+    src = '';
+    if isfield(P, 'source'), src = [P.source ' ']; end
+    name = sprintf('ray traced, %s(%s), %.1f m/s at the landers', src, ...
+        char(P.time, 'yyyy-MM-dd HH:mm'), c);
+else
+    delayfun = [];
+    if isfield(P, 'time') && ~isnat(P.time)
+        name = sprintf('straight line, %.1f m/s (%s)', c, char(P.time, 'yyyy-MM-dd HH:mm'));
+    else
+        name = sprintf('straight line, %.1f m/s', c);
+    end
+end
 end
 
 %% ------------------------------------------------------------------------

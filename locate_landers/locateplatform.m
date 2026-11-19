@@ -101,6 +101,20 @@ function results = locateplatform(data, varargin)
 %                        by the heading first and then looking for a pitch
 %                        and roll on top would not give the true pitch and
 %                        roll of the platform.
+%       'maxrange'     - only clicks with the boat within this horizontal
+%                        range (m) of the lander are used for the heading
+%                        and the fine search. The range is from the coarse
+%                        location, then once more from the fine location.
+%                        Close passes give steep slants, where refraction
+%                        and the seabed echo of the boat noise do not bias
+%                        the slant angle. Default inf (every click).
+%       'propagation'  - a ray traced propagation struct (MAKE_PROPAGATION_TABLE)
+%                        whose table reaches the boat ranges. The fine
+%                        search then predicts the slant the boat noise
+%                        arrives from through that sound speed profile
+%                        instead of a straight line, so refraction is
+%                        allowed for. The table's hydrophone depth should
+%                        be DEPTH. Default [] (straight lines).
 %       'setlocation'  - [lat lon] to force as the coarse location, skipping
 %                        the coarse position search. The clock offset is
 %                        still fitted, as the offset in RTCOFFSET giving the
@@ -126,6 +140,8 @@ p.addParameter('finegridspacing', 1);
 p.addParameter('finegridlims', [-30 30]);
 p.addParameter('fineanglelims', [-10 10]);
 p.addParameter('fineanglestep', 0.5);
+p.addParameter('maxrange', inf);
+p.addParameter('propagation', []);
 p.addParameter('setlocation', [], @(x) isempty(x) || (isnumeric(x) && numel(x)==2));
 p.parse(varargin{:});
 opt = p.Results;
@@ -154,6 +170,20 @@ if ~isempty(opt.gridlims)
 elseif ~isempty(opt.gridcenter)
     warning('locateplatform:gridCenterIgnored', ...
         '''gridcenter'' is ignored because ''gridlims'' is not set.');
+end
+
+% the slant angle model of the fine search: straight lines, or ray traced
+slantfun = [];
+if ~isempty(opt.propagation) && isfield(opt.propagation, 'type') && strcmp(opt.propagation.type, 'raytrace')
+    P = opt.propagation;
+    if max(P.ranges) < 1000
+        warning('locateplatform:shortTable', ...
+            'The propagation table only reaches %.0f m; boat clicks further away use its last range.', max(P.ranges));
+    end
+    F = griddedInterpolant({P.ranges(:), P.depths(:)}, P.slant, 'linear', 'nearest');
+    % DZ is the height of the source above the platform; its depth in the
+    % table is the same height above the table's hydrophones
+    slantfun = @(r, dz) deg2rad(F(r(:), min(max(P.hdepth - dz(:), P.depths(1)), P.depths(end))));
 end
 
 % ---- unpack the deployment record --------------------------------------
@@ -276,8 +306,13 @@ for i = 1:length(clkgeobearings)
 end
 
 %clicks which fall outside the GPS data have no source location and so no
-%bearing difference
-validclk = ~isnan(clkangdiff);
+%bearing difference. With MAXRANGE only the close passes are used.
+srcrange = boatrange(location, srcclklocationst);
+validclk = ~isnan(clkangdiff) & srcrange <= opt.maxrange;
+if sum(validclk) < 20
+    error('locateplatform:fewClicks', 'Only %d clicks within %g m of the lander.', ...
+        sum(validclk), opt.maxrange);
+end
 
 %use a circular mean so the wrap around at +/-180 degrees does not bias the
 %heading, and a circular standard deviation to show how well it fits
@@ -298,7 +333,22 @@ headingstd = rad2deg(sqrt(-2*log(abs(meanvec))));
     'gridspacing', opt.finegridspacing, 'gridlims', opt.finegridlims, ...
     'headinglims', headingoffset + opt.fineanglelims, 'pitchlims', opt.fineanglelims, ...
     'rolllims', opt.fineanglelims, 'anglestep', opt.fineanglestep, ...
-    'searchtype', 'all', 'pretext', 'Fine search ');
+    'searchtype', 'all', 'pretext', 'Fine search ', 'slantfun', slantfun);
+
+%with MAXRANGE, the clicks are picked again by their range from the fine
+%location and the fine search is run once more if that changes them
+if isfinite(opt.maxrange)
+    validclk2 = ~isnan(clkangdiff) & boatrange(locationfine, srcclklocationst) <= opt.maxrange;
+    if ~isequal(validclk2, validclk)
+        validclk = validclk2;
+        [locationfine, hprfinal, chi2fine, chi2surffine] = ...
+            grdsrch_pos_hpr(clkgeobearings(validclk, :), srcclklocations(validclk, :), location, ...
+            'gridspacing', opt.finegridspacing, 'gridlims', opt.finegridlims, ...
+            'headinglims', headingoffset + opt.fineanglelims, 'pitchlims', opt.fineanglelims, ...
+            'rolllims', opt.fineanglelims, 'anglestep', opt.fineanglestep, ...
+            'searchtype', 'all', 'pretext', 'Fine search (again) ', 'slantfun', slantfun);
+    end
+end
 
 %and the bearings with the full orientation applied
 clkgeobearingsfinal = rotate_bearings(clkgeobearings, hprfinal);
@@ -329,6 +379,11 @@ results.srcbearings         = srcbearings;
 results.droplocation        = dropgpsloc;
 results.sqlitedB            = sqlitedB;
 results.binaryfolder        = binaryfolder;
+results.maxrange            = opt.maxrange;
+results.propagation         = 'straight line';
+if ~isempty(slantfun)
+    results.propagation = sprintf('ray traced, %s', opt.propagation.source);
+end
 
 end
 
@@ -377,6 +432,18 @@ if isempty(clicks)
         opt.eventtype, char(data.startTime, 'yyyy-MM-dd'), data.landernumber);
 end
 
+end
+
+% ------------------------------------------------------------------------
+function r = boatrange(location, srclocations)
+%BOATRANGE Horizontal range (m) from LOCATION [lat lon] to the boat for every
+%source location [datenum lat lon depth]; NaN where there is none.
+r = nan(size(srclocations, 1), 1);
+for i = 1:size(srclocations, 1)
+    if ~any(isnan(srclocations(i, 2:3)))
+        r(i) = latLong2meters(location(1), location(2), srclocations(i,2), srclocations(i,3));
+    end
+end
 end
 
 % ------------------------------------------------------------------------

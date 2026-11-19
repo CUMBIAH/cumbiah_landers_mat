@@ -20,10 +20,15 @@ deployment   = 1;
 [startTime, ~, serialnumber] = getlanderdeploymentinfo(landernumber, deployment, country);
 data = getlanderpaths(serialnumber, startTime);
 
+% %% TEMP
+% data.sqlitedB = '/Users/jdjm/Library/CloudStorage/Dropbox/SMRU_research/2026-27_CUMBIAH/landers/Denmark/lander2/pamguard_michael/lander2_Denmark_database_annotated.sqlite3';
+% data.binaryfolder ='/Users/jdjm/Library/CloudStorage/Dropbox/SMRU_research/2026-27_CUMBIAH/landers/Denmark/lander2/pamguard_michael/pamguard/PAMBinary';
+% %
+
 %LOCATEPLATFORM takes the calibration clicks from the deployment day, the
 %boat GPS track and the drop position straight out of DATA. The depth is not
 %in the spreadsheet so it is passed here.
-% results = locateplatform(data, 'depth', 17, 'setlocation', [54.747839655666297, 12.533771685747112]);
+% results = locateplatform(data, 'depth', 17, 'setlocation', [54.747839655666297, 12.5337715747112]);
 % results = locateplatform(data, 'depth', 17);
  results = locateplatform(data, 'depth', 17, 'gridlims', [-50 50], 'gridcenter', data.droplocation);
 

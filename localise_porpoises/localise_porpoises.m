@@ -38,6 +38,9 @@ landers    = [1 2 3];
 arrayfile = fullfile(getlandersuperfolder(country), ...
     sprintf('lander_array_locations_dep%d.mat', deployment));
 
+
+%% Settings 
+
 encounters = [];        % encounters to localise, e.g. 3:5 for PA1003-PA1005; [] = all
 tlims = [];             % [start end] datetime of the tracks used; [] = the whole deployment
 localise = true;        % false = match the tracks and stop: quick, to check the clocks and matching
@@ -49,13 +52,6 @@ outfolder = '';         % results folder; '' = <lander super folder>/localisatio
 nruns = 5;              % the number of runs for the particle filter
 particles = 1000;       % particles in each run
 
-%% Paths
-% the particle filter and time delay code are not on the startup path
-root = fullfile(matlabdrive, 'MATLAB');
-folders = strsplit(genpath(fullfile(root, 'localisation')), pathsep);
-[~, names] = cellfun(@fileparts, folders, 'UniformOutput', false);
-folders = folders(~ismember(names, {'_old', '_test', '_tests', ''}));
-addpath(strjoin([folders, {fullfile(root, 'sim_sounds', 'sim_utils')}], pathsep));
 
 %% The landers
 % one deployment record for each lander of the array

@@ -57,6 +57,13 @@ nlander = numel(landers);
 for i = 1:nlander
     [startTime, ~, serialnumber] = getlanderdeploymentinfo(landers(i), deployment, country);
     data(i) = getlanderpaths(serialnumber, startTime);
+
+    %% TEMP
+    if i==2
+        data(i).sqlitedB = '/Users/jdjm/Library/CloudStorage/Dropbox/SMRU_research/2026-27_CUMBIAH/landers/Denmark/lander2/pamguard_michael/lander2_Denmark_database_annotated.sqlite3';
+        data(i).binaryfolder ='/Users/jdjm/Dropbox/SMRU_research/2026-27_CUMBIAH/landers/Denmark/lander2/pamguard_michael/pamguard/PAMBinary';
+    end
+    %%%%%
 end
 
 dorecalc = recalculate || ~isfile(resultsfile);
@@ -166,8 +173,8 @@ for i = 1:nlander
         'MarkerFaceColor', cols(i,:), 'MarkerEdgeColor', 'k');
     dropdist = latLong2meters(droplocs(i,1), droplocs(i,2), calclocs(i,1), calclocs(i,2));
 
-        labels{end+1} = sprintf('Lander %d calculated (%.1f m from drop)', landers(i), dropdist);
-   
+    labels{end+1} = sprintf('Lander %d calculated (%.1f m from drop)', landers(i), dropdist);
+
 end
 
 %thin lines between each pair of calculated positions

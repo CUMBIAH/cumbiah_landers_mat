@@ -115,14 +115,6 @@ function results = locateplatform(data, varargin)
 %                        instead of a straight line, so refraction is
 %                        allowed for. The table's hydrophone depth should
 %                        be DEPTH. Default [] (straight lines).
-%       'propoffset'   - distances (m) the boat noise is made astern of the
-%                        GPS antenna, along the boat's track, to try in the
-%                        fine search: the cavitation comes from the
-%                        propeller, not the antenna. The fine search is run
-%                        at each one and the one with the lowest chi2 kept.
-%                        Where the boat is going slower than 0.5 m/s its
-%                        direction is unknown and it is not shifted.
-%                        Default 0 (the GPS position).
 %       'setlocation'  - [lat lon] to force as the coarse location, skipping
 %                        the coarse position search. The clock offset is
 %                        still fitted, as the offset in RTCOFFSET giving the
@@ -150,7 +142,6 @@ p.addParameter('fineanglelims', [-10 10]);
 p.addParameter('fineanglestep', 0.5);
 p.addParameter('maxrange', inf);
 p.addParameter('propagation', []);
-p.addParameter('propoffset', 0);
 p.addParameter('setlocation', [], @(x) isempty(x) || (isnumeric(x) && numel(x)==2));
 p.parse(varargin{:});
 opt = p.Results;
@@ -337,45 +328,25 @@ headingstd = rad2deg(sqrt(-2*log(abs(meanvec))));
 % applied in that order, so rotating by the heading first and then
 % searching for a pitch and roll on top of it would not give the true
 % pitch and roll of the platform.
-% The boat noise is made at the propeller, astern of the GPS antenna, so
-% with PROPOFFSET the fine search is run with the source moved astern along
-% the boat's track by each offset and the best fit kept.
 fineargs = {'gridspacing', opt.finegridspacing, 'gridlims', opt.finegridlims, ...
     'headinglims', headingoffset + opt.fineanglelims, 'pitchlims', opt.fineanglelims, ...
     'rolllims', opt.fineanglelims, 'anglestep', opt.fineanglestep, ...
     'searchtype', 'all', 'slantfun', slantfun};
-boatdir = boat_direction(clickbearings(:,1), gpsdatartc);
-propoffsets = opt.propoffset(:)';
-chi2prop = nan(size(propoffsets));
-chi2fine = inf;
-srcclklocations0 = srcclklocations;
-for k = 1:numel(propoffsets)
-    srcloc = shift_astern(srcclklocations0, boatdir, propoffsets(k));
-    srclocst = [clickbearings(:,1) srcloc];
-    pre = sprintf('Fine search (propeller %g m astern) ', propoffsets(k));
-    valid = validclk;
-    [lf, hf, cf, sf] = grdsrch_pos_hpr(clkgeobearings(valid, :), srcloc(valid, :), location, ...
-        fineargs{:}, 'pretext', pre);
-    %with MAXRANGE, the clicks are picked again by their range from the fine
-    %location and the fine search is run once more if that changes them
-    if isfinite(opt.maxrange)
-        valid2 = ~isnan(clkangdiff) & boatrange(lf, srclocst) <= opt.maxrange;
-        if ~isequal(valid2, valid)
-            valid = valid2;
-            [lf, hf, cf, sf] = grdsrch_pos_hpr(clkgeobearings(valid, :), srcloc(valid, :), location, ...
-                fineargs{:}, 'pretext', [pre '(again) ']);
-        end
-    end
-    chi2prop(k) = cf;
-    if cf < chi2fine
-        locationfine = lf; hprfinal = hf; chi2fine = cf; chi2surffine = sf;
-        validfine = valid;
-        srcclklocations = srcloc;
-        srcclklocationst = srclocst;
-        propoffset = propoffsets(k);
+[locationfine, hprfinal, chi2fine, chi2surffine] = ...
+    grdsrch_pos_hpr(clkgeobearings(validclk, :), srcclklocations(validclk, :), location, ...
+    fineargs{:}, 'pretext', 'Fine search ');
+
+%with MAXRANGE, the clicks are picked again by their range from the fine
+%location and the fine search is run once more if that changes them
+if isfinite(opt.maxrange)
+    validclk2 = ~isnan(clkangdiff) & boatrange(locationfine, srcclklocationst) <= opt.maxrange;
+    if ~isequal(validclk2, validclk)
+        validclk = validclk2;
+        [locationfine, hprfinal, chi2fine, chi2surffine] = ...
+            grdsrch_pos_hpr(clkgeobearings(validclk, :), srcclklocations(validclk, :), location, ...
+            fineargs{:}, 'pretext', 'Fine search (again) ');
     end
 end
-validclk = validfine;
 
 %and the bearings with the full orientation applied
 clkgeobearingsfinal = rotate_bearings(clkgeobearings, hprfinal);
@@ -407,9 +378,6 @@ results.droplocation        = dropgpsloc;
 results.sqlitedB            = sqlitedB;
 results.binaryfolder        = binaryfolder;
 results.maxrange            = opt.maxrange;
-results.propoffset          = propoffset;       % m astern of the GPS, the best of PROPOFFSETS
-results.propoffsets         = propoffsets;
-results.chi2propoffsets     = chi2prop;         % chi2 of the fine search at each
 results.propagation         = 'straight line';
 if ~isempty(slantfun)
     results.propagation = sprintf('ray traced, %s', opt.propagation.source);
@@ -462,33 +430,6 @@ if isempty(clicks)
         opt.eventtype, char(data.startTime, 'yyyy-MM-dd'), data.landernumber);
 end
 
-end
-
-% ------------------------------------------------------------------------
-function u = boat_direction(t, gps)
-%BOAT_DIRECTION Unit vector [north east] of the boat's travel at each time T
-%(datenum) from the GPS track GPS [datenum lat lon], over +/-10 s. NaN where
-%the boat is going slower than 0.5 m/s, when its direction is unknown.
-dt = 10/86400;
-lat1 = interp1(gps(:,1), gps(:,2), t - dt); lon1 = interp1(gps(:,1), gps(:,3), t - dt);
-lat2 = interp1(gps(:,1), gps(:,2), t + dt); lon2 = interp1(gps(:,1), gps(:,3), t + dt);
-dn = (lat2 - lat1)*111320;
-de = (lon2 - lon1)*111320.*cosd((lat1 + lat2)/2);
-v = hypot(dn, de);
-u = [dn, de]./v;
-u(v/20 < 0.5 | isnan(v), :) = NaN;
-end
-
-% ------------------------------------------------------------------------
-function src = shift_astern(src, u, d)
-%SHIFT_ASTERN Move source locations [lat lon depth] D metres astern along
-%the boat's direction U [north east]. Where U is NaN they are not moved.
-if d == 0
-    return
-end
-ok = ~any(isnan(u), 2);
-src(ok,1) = src(ok,1) - d*u(ok,1)/111320;
-src(ok,2) = src(ok,2) - d*u(ok,2)./(111320*cosd(src(ok,1)));
 end
 
 % ------------------------------------------------------------------------

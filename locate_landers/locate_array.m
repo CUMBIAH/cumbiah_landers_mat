@@ -35,10 +35,9 @@ landers    = [1 2 3];
 
 depth = 17;             % depth of the landers (m), passed to LOCATEPLATFORM
 
-% how the boat noise gets to the landers. Each option changes the name of
-% RESULTSFILE, so the plain fit (both false) is kept in the usual file
-usepropoffset  = false;     % search for the propeller offset astern of the GPS antenna
-propoffsets    = 0:2:12;    % ... the offsets tried (m)
+% how the boat noise gets to the landers. With ray traced propagation the
+% name of RESULTSFILE gets the table's name, so the plain fit is kept in the
+% usual file
 usepropagation = false;     % ray traced propagation (refraction) instead of straight lines
 propagationtable = 'synthetic_autumn_halocline'; % ... the table in <denmarkdir>/propagation:
                             % a CTD cast name, e.g. 'CC2043006_20250912_092555', or the
@@ -57,13 +56,7 @@ denmarkdir  = getlandersuperfolder(country);
 bathygrid   = fullfile(denmarkdir, 'bathymetry', 'KattegatSouth', 'w001001.adf');
 bathyfile   = fullfile(denmarkdir, 'bathymetry', sprintf('lander_array_bathymetry_dep%d.mat', deployment));
 suffix = '';
-propoffsetarg = 0;
 propagation = [];
-
-if usepropoffset
-    suffix = [suffix '_prop'];
-    propoffsetarg = propoffsets;
-end
 if usepropagation
     suffix = [suffix '_' propagationtable];
     S = load(fullfile(denmarkdir, 'propagation', [propagationtable '_propagation.mat']));
@@ -94,7 +87,7 @@ dorecalc = recalculate || ~isfile(resultsfile);
 if ~dorecalc
     cached = load(resultsfile);
     dorecalc = ~isfield(cached, 'locstable') || ~isequal(cached.landers, landers) || ...
-        cached.depth ~= depth || (usepropoffset && (~isfield(cached, 'propoffsets') || ~isequal(cached.propoffsets, propoffsets)));
+        cached.depth ~= depth;
 end
 
 if dorecalc
@@ -110,8 +103,7 @@ if dorecalc
         %main location
         % results{i} = locateplatform(data(i), 'depth', depth, 'setlocation', setloc);
         results{i} = locateplatform(data(i), 'depth', depth, 'gridlims', [-40 40], ...
-            'gridcenter', data(i).droplocation, 'propoffset', propoffsetarg, 'propagation', propagation);
-        locs(i).propoffset = results{i}.propoffset;
+            'gridcenter', data(i).droplocation, 'propagation', propagation);
 
         for k = 1:numel(keep)
             locs(i).(keep{k}) = results{i}.(keep{k});
@@ -119,8 +111,7 @@ if dorecalc
     end
     %saved as a table, one row per lander
     locstable = struct2table(locs);
-    save(resultsfile, 'locstable', 'landers', 'depth', 'deployment', 'usepropoffset', 'propoffsets', ...
-        'usepropagation', 'propagationtable');
+    save(resultsfile, 'locstable', 'landers', 'depth', 'deployment', 'usepropagation', 'propagationtable');
 else
     locstable = cached.locstable;
     locs = table2struct(locstable);

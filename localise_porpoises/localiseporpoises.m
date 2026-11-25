@@ -10,8 +10,12 @@ function [loctracks, info] = localiseporpoises(landers, arrayfile, varargin)
 %   LANDERS is a cell array of two or more (usually three) deployment
 %   records, one per lander of the array, as returned by GETLANDERPATHS.
 %   Each supplies the database holding the lander's porpoise tracks
-%   (DATA.PORPOISEDB, ..._porpoise.sqlite3) and its binary store. The first
-%   lander is the reference: every time is on its clock.
+%   (DATA.PORPOISEDB, ..._porpoise.sqlite3) and its binary store, or, if
+%   DATA.CLICKSFILE is set, a .mat file of the clicks of the tracks
+%   (CLICK_EVENTS, as LOAD_EVENT_CLICKS returns them, and HYDROPHONES, the
+%   array as PAMGuard has it), which is read instead, e.g. for simulated
+%   clicks (_test/test_localise_simulated.m). The first lander is the
+%   reference: every time is on its clock.
 %
 %   ARRAYFILE is the .mat file saved by LOCATE_ARRAY, with the position
 %   (LOCATIONFINE) and orientation (HPRFINAL) of every lander of the array
@@ -26,8 +30,9 @@ function [loctracks, info] = localiseporpoises(landers, arrayfile, varargin)
 %
 %   HOW IT WORKS
 %
-%   TRACKS. The porpoise tracks are read back from the PAMGuard databases,
-%   so anything an analyst has changed in the PAMGuard viewer is used. Only
+%   TRACKS. The porpoise tracks are read back from the PAMGuard databases
+%   (LOAD_EVENT_CLICKS, without the waveforms), so anything an analyst has
+%   changed in the PAMGuard viewer is used. Only
 %   the tracks of this deployment are read (codes PP<deployment>...). The
 %   codes of CUMBIAH_MULTITRACK are per lander - PP1003AB01 on lander 1 has
 %   nothing to do with PP1003AB01 on lander 2 - so they are not used to
@@ -192,10 +197,17 @@ function [loctracks, info] = localiseporpoises(landers, arrayfile, varargin)
 %                        from several: 'time', the closest in time, or
 %                        'season', the closest in time of year, whatever
 %                        the year (SELECT_PROPAGATION) ['time']
+%       'likelihood'   - how the time delay chi2 of a particle becomes its
+%                        weight (CETWEIGHTTD): 'inverse', 1/mean(sqrt(chi2)),
+%                        or 'gaussian', exp(-chi2/2). The gaussian is better
+%                        on clean simulated clicks (test_localise_simulated)
+%                        but on real clicks it is overconfident and jumpy;
+%                        the heavy tailed inverse copes with bad delays
+%                        ['inverse']
 %       'stdaccel'     - st dev of acceleration of the movement model [0.5]
 %       'maxspeed'     - (m/s) [4]
 %       'nruns'        - runs of the particle filter [5]
-%       'particles'    - particles in each run [1000]
+%       'particles'    - particles in each run [5000]
 %       'clksearchwindow' - clicks this close on two landers are the same
 %                        click (s) [0.1]
 %       'maxtimegap'   - a track is broken at gaps longer than this (s) [5]
@@ -250,10 +262,11 @@ p.addParameter('assocargs', {'maxRange', 500, 'crossTol', 10, 'crossFrac', 0.5, 
 p.addParameter('soundspeed', 1500);
 p.addParameter('propagation', []);
 p.addParameter('propagationmatch', 'time');
+p.addParameter('likelihood', 'inverse');
 p.addParameter('stdaccel', 0.5);
 p.addParameter('maxspeed', 4);
 p.addParameter('nruns', 5);
-p.addParameter('particles', 1000);
+p.addParameter('particles', 5000);
 p.addParameter('clksearchwindow', 0.1);
 p.addParameter('maxtimegap', 5);
 p.addParameter('minfragclicks', 10);
@@ -330,7 +343,12 @@ for d = 1:nl
     if numel(row) ~= 1
         error('localiseporpoises:notInArray', 'Lander %d is not in %s.', data.landernumber, arrayfile);
     end
-    if ~isfield(data, 'porpoisedB') || isempty(data.porpoisedB) || ~isfile(data.porpoisedB)
+    if uses_clicksfile(data)
+        if ~isfile(data.clicksfile)
+            error('localiseporpoises:noClicksFile', 'Lander %d: the clicks file %s does not exist.', ...
+                data.landernumber, data.clicksfile);
+        end
+    elseif ~isfield(data, 'porpoisedB') || isempty(data.porpoisedB) || ~isfile(data.porpoisedB)
         error('localiseporpoises:noDatabase', ...
             ['Lander %d has no porpoise track database (DATA.PORPOISEDB) - run ' ...
              'CUMBIAH_MULTITRACK first.'], data.landernumber);
@@ -378,10 +396,7 @@ fprintf('%s, deployment %d: %s to %s\n', strjoin({dev.name}, ', '), deployment, 
 for d = 1:nl
     [~, x, y] = latLong2meters(reflatlon(1), reflatlon(2), dev(d).latlon(1), dev(d).latlon(2));
     dev(d).xyz = [x, y, -depth(d)];
-    % the hydrophones as PAMGuard has them, rotated to east north up with
-    % the orientation of the lander and put where it lies
     dev(d).rotm = platform_rotm(dev(d).hpr);
-    dev(d).hydrophones = (dev(d).rotm*read_pamguard_hydrophones(dev(d).data.porpoisedB)')' + dev(d).xyz;
     fprintf('  %s: %.1f m east, %.1f m north, %.1f m deep; heading, pitch, roll %s\n', ...
         dev(d).name, x, y, depth(d), num2str(dev(d).hpr, '%.1f '));
 end
@@ -401,6 +416,9 @@ end
 boat = boat + [-1 1]*opt.boatpad/1440;
 for d = 1:nl
     T = load_tracks(dev(d).data, deployment, cachefolder, opt.usecache);
+    % the hydrophones as PAMGuard has them, rotated to east north up with
+    % the orientation of the lander and put where it lies
+    dev(d).hydrophones = (dev(d).rotm*T.hydrophones')' + dev(d).xyz;
     % the tracks inside the time limits and clear of the boat
     isboat = any(T.tracklims(:,1) <= boat(:,2)' & T.tracklims(:,2) >= boat(:,1)', 2);
     keep = find(T.tracklims(:,2) >= tlims(1) & T.tracklims(:,1) <= tlims(2) & ~isboat);
@@ -684,7 +702,8 @@ for k = encounters
                     'F.timedelaysobs(use,:), F.hydrophonesgeo(use,:), startlocation, ' ...
                     '''TimeDelayErrors'', F.timedelayserr(use,:), ''Bathymetry'', meshdata, ' ...
                     '''StdAccel'', opt.stdaccel, ''MaxSpeed'', opt.maxspeed, ''SoundSpeed'', ' ...
-                    'csound, ''Particles'', opt.particles, ''DelayFunction'', delayfun)']);
+                    'csound, ''Particles'', opt.particles, ''DelayFunction'', delayfun, ' ...
+                    '''Likelihood'', opt.likelihood)']);
                 % spread of the particles in x, y and z
                 err(:,:,ii) = squeeze(std(pf.particles(1:3,:,:), 0, 2));
                 clear pf
@@ -753,6 +772,10 @@ settings.landers = [dev.number];
 settings.arrayfile = arrayfile;
 settings.bathyfile = bathysource;
 settings.databases = cellfun(@(D) D.porpoisedB, landers, 'UniformOutput', false);
+settings.clicksfiles = repmat({''}, 1, nl);  % '' where the database was used
+for d = find(cellfun(@uses_clicksfile, landers))
+    settings.clicksfiles{d} = landers{d}.clicksfile;
+end
 settings.tlims = tlims;
 settings.depth = depth;
 settings.headingcorrection = headingcorrection;
@@ -888,94 +911,78 @@ end
 
 function T = load_tracks(data, deployment, cachefolder, usecache)
 % the clicks of the tracks of a deployment (events with a code PP<d>nnnLLff)
-% in a lander's porpoise database:
+% of a lander, from its porpoise database and binary store
+% (LOAD_EVENT_CLICKS) or, if DATA.CLICKSFILE is given, from that .mat file:
 %   t, angles, delays, tderr - time (datenum), angles (rad), time delays
 %          (s) and time delay error (s) of each click
 %   track - index of the track of each click
 %   code, tracklims - code and [start end] (datenum) of each track
-% LOAD_EVENT_CLICKS is not used: it reads the binary files an event at a
-% time and keeps the waveforms, which for a lander is slow and GBs.
-db = dir(data.porpoisedB);
-cachefile = fullfile(cachefolder, sprintf('tracks_%d_lander%d_dep%d.mat', data.serialnumber, ...
-    data.landernumber, deployment));
-if usecache && exist(cachefile, 'file')
-    q = load(cachefile);
-    % the database has not changed since
-    if isfield(q, 'T') && q.dbdatenum == db.datenum && strcmp(q.dbfile, data.porpoisedB)
-        T = q.T;
-        return
+%   hydrophones - [x y z] (m) of the hydrophones in PAMGuard's array frame
+if uses_clicksfile(data)
+    S = load(data.clicksfile, 'click_events', 'hydrophones');
+    E = S.click_events;
+    hydrophones = S.hydrophones;
+    source = data.clicksfile;
+else
+    db = dir(data.porpoisedB);
+    cachefile = fullfile(cachefolder, sprintf('tracks_%d_lander%d_dep%d.mat', data.serialnumber, ...
+        data.landernumber, deployment));
+    if usecache && exist(cachefile, 'file')
+        q = load(cachefile);
+        % the database has not changed since
+        if isfield(q, 'T') && isfield(q.T, 'hydrophones') && q.dbdatenum == db.datenum && ...
+                strcmp(q.dbfile, data.porpoisedB)
+            T = q.T;
+            return
+        end
     end
+    fprintf('lander%d: loading tracks from %s (slow)\n', data.landernumber, db.name);
+    E = load_event_clicks(data.porpoisedB, data.binaryfolder, [], [], 'waveforms', false, ...
+        'comment', sprintf('PP%d%%', deployment), 'verbose', false);
+    hydrophones = read_pamguard_hydrophones(data.porpoisedB);
+    source = data.porpoisedB;
 end
-fprintf('lander%d: loading tracks from %s (slow)\n', data.landernumber, db.name);
-
-conn = sqlite(data.porpoisedB, 'readonly');
-c = onCleanup(@() close(conn));
-ev = fetch(conn, 'select Id, comment from Click_Detector_OfflineEvents where comment like ''PP%''');
-ck = fetch(conn, ['select EventId, BinaryFile, UID from Click_Detector_OfflineClicks where EventId in ' ...
-    '(select Id from Click_Detector_OfflineEvents where comment like ''PP%'')']);
-clear c
 
 % the tracks of this deployment
-codes = strtrim(cellstr(string(ev.comment)));
+codes = {};
+if ~isempty(E)
+    codes = strtrim({E.comment})';
+end
 tok = regexp(codes, '^PP(\d)\d{3}[A-Z]{2}\d{2}', 'tokens', 'once');
 ok = ~cellfun(@isempty, tok);
 ok(ok) = cellfun(@(t) str2double(t{1}), tok(ok)) == deployment;
-eventid = double(ev.Id(ok));
+E = E(ok);
 codes = codes(ok);
 if isempty(codes)
     error('localiseporpoises:noTracks', ...
         'No tracks of deployment %d (codes PP%d...) in %s - run CUMBIAH_MULTITRACK first.', ...
-        deployment, deployment, data.porpoisedB);
-end
-[in, track] = ismember(double(ck.EventId), eventid);
-track = track(in);
-uid = double(ck.UID(in));
-[~, fname, fext] = fileparts(strtrim(cellstr(string(ck.BinaryFile(in)))));
-files = strcat(fname, fext);
-
-% the binary files, wherever they are in the store
-list = dir(fullfile(data.binaryfolder, '**', '*.pgdf'));
-[ufiles, ~, ifile] = unique(files);
-[found, where] = ismember(ufiles, {list.name});
-if ~all(found)
-    warning('localiseporpoises:noBinaryFile', '%d of the %d binary files of the tracks are not in %s.', ...
-        sum(~found), numel(ufiles), data.binaryfolder);
+        deployment, deployment, source);
 end
 
-n = numel(uid);
-T.t = nan(n, 1);
-T.angles = nan(n, 2);
-T.delays = [];
-T.tderr = nan(n, 1);
-for f = find(found)'
-    rows = find(ifile == f);
-    [~, clicks] = evalc(['pgmatlab.loadPamguardBinaryFile(fullfile(list(where(f)).folder, ' ...
-        'list(where(f)).name), ''uidlist'', uid(rows))']);
-    if isempty(clicks)
-        continue
-    end
-    [has, ic] = ismember(uid(rows), double([clicks.UID]));
-    rows = rows(has);
-    clicks = clicks(ic(has));
-    if isempty(T.delays)
-        T.delays = nan(n, numel(clicks(1).timeDelays));
-    end
+% the clicks of every track
+[t, angles, delays, tderr, track] = deal(cell(numel(E), 1));
+for k = 1:numel(E)
+    c = E(k).clicks(:);
+    t{k} = [c.date]';
+    angles{k} = cell2mat(arrayfun(@(x) reshape(x.angles(1:2), 1, 2), c, 'UniformOutput', false));
+    delays{k} = cell2mat(arrayfun(@(x) x.timeDelays(:)', c, 'UniformOutput', false));
     % the error of the time delays from the SNR of the click (s)
-    [~, tderr] = evalc('error_TDOA(clicks)');
-    for i = 1:numel(rows)
-        T.t(rows(i)) = clicks(i).date;
-        T.angles(rows(i),:) = clicks(i).angles(1:2);
-        T.delays(rows(i),:) = clicks(i).timeDelays;
-        T.tderr(rows(i)) = tderr{i}(1);
-    end
+    [~, err] = evalc('error_TDOA(c)');
+    tderr{k} = cellfun(@(e) e(1), err(:));
+    track{k} = repmat(k, numel(c), 1);
 end
-ok = ~isnan(T.t) & all(isfinite(T.delays), 2) & isfinite(T.tderr);
-[T.t, order] = sort(T.t(ok));
+t = vertcat(t{:});
+delays = vertcat(delays{:});
+tderr = vertcat(tderr{:});
+ok = ~isnan(t) & all(isfinite(delays), 2) & isfinite(tderr);
+[T.t, order] = sort(t(ok));
 keep = find(ok);
 keep = keep(order);
-T.angles = T.angles(keep,:);
-T.delays = T.delays(keep,:);
-T.tderr = T.tderr(keep);
+angles = vertcat(angles{:});
+track = vertcat(track{:});
+T.angles = angles(keep,:);
+T.delays = delays(keep,:);
+T.tderr = tderr(keep);
 T.track = track(keep);
 T.code = codes;
 T.tracklims = nan(numel(codes), 2);
@@ -985,11 +992,18 @@ for k = 1:numel(codes)
         T.tracklims(k,:) = [tk(1) tk(end)];
     end
 end
-dbdatenum = db.datenum; %#ok<NASGU>
-dbfile = data.porpoisedB; %#ok<NASGU>
-if usecache
+T.hydrophones = hydrophones;
+if usecache && ~uses_clicksfile(data)
+    dbdatenum = db.datenum; %#ok<NASGU>
+    dbfile = data.porpoisedB; %#ok<NASGU>
     save(cachefile, 'T', 'dbdatenum', 'dbfile');
 end
+end
+
+function tf = uses_clicksfile(data)
+% the clicks of the lander are in a .mat file, not its database and binary
+% store
+tf = isfield(data, 'clicksfile') && ~isempty(data.clicksfile);
 end
 
 function enc = find_array_encounters(dev, prior, gap)

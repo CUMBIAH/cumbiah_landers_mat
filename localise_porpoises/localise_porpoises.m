@@ -46,11 +46,11 @@ tlims = [];             % [start end] datetime of the tracks used; [] = the whol
 localise = true;        % false = match the tracks and stop: quick, to check the clocks and matching
 outfolder = '';         % results folder; '' = <lander super folder>/localisation
 
-% particle filter (porpoise). 10 runs of 2000 particles is the most careful
-% but takes about 1 s for every click, i.e. many hours for a deployment. 5
-% runs of 1000 is about five times quicker.
+% particle filter (porpoise). The 'gaussian' likelihood of LOCALISEPORPOISES
+% needs about 5000 particles to be steady; fewer runs or particles are
+% quicker but the tracks wander (_test/test_localise_simulated.m).
 nruns = 5;              % the number of runs for the particle filter
-particles = 1000;       % particles in each run
+particles = 5000;       % particles in each run
 
 
 %% The landers

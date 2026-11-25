@@ -35,6 +35,15 @@ landers    = [1 2 3];
 
 depth = 17;             % depth of the landers (m), passed to LOCATEPLATFORM
 
+% how the boat noise gets to the landers. Each option changes the name of
+% RESULTSFILE, so the plain fit (both false) is kept in the usual file
+usepropoffset  = false;     % search for the propeller offset astern of the GPS antenna
+propoffsets    = 0:2:12;    % ... the offsets tried (m)
+usepropagation = false;     % ray traced propagation (refraction) instead of straight lines
+propagationtable = 'synthetic_autumn_halocline'; % ... the table in <denmarkdir>/propagation:
+                            % a CTD cast name, e.g. 'CC2043006_20250912_092555', or the
+                            % synthetic autumn profile (no cast was taken in Oct 2024)
+
 boxsize    = 1000;      % bathymetry kept either side of the landers is boxsize/2 (m)
 zexag      = 100;       % vertical exaggeration - the seabed here varies by ~1 m per km
 plotradius = 300;       % plot +/- this many m around the landers, Inf for all the bathymetry
@@ -47,7 +56,20 @@ reextractbathy = false; % force the bathymetry to be cut out of the grid again
 denmarkdir  = getlandersuperfolder(country);
 bathygrid   = fullfile(denmarkdir, 'bathymetry', 'KattegatSouth', 'w001001.adf');
 bathyfile   = fullfile(denmarkdir, 'bathymetry', sprintf('lander_array_bathymetry_dep%d.mat', deployment));
-resultsfile = fullfile(denmarkdir, sprintf('lander_array_locations_dep%d.mat', deployment));
+suffix = '';
+propoffsetarg = 0;
+propagation = [];
+
+if usepropoffset
+    suffix = [suffix '_prop'];
+    propoffsetarg = propoffsets;
+end
+if usepropagation
+    suffix = [suffix '_' propagationtable];
+    S = load(fullfile(denmarkdir, 'propagation', [propagationtable '_propagation.mat']));
+    propagation = S.propagation;
+end
+resultsfile = fullfile(denmarkdir, sprintf('lander_array_locations_dep%d%s.mat', deployment, suffix));
 
 nlander = numel(landers);
 
@@ -60,8 +82,10 @@ for i = 1:nlander
 
     %% TEMP
     if i==2
-        data(i).sqlitedB = '/Users/jdjm/Library/CloudStorage/Dropbox/SMRU_research/2026-27_CUMBIAH/landers/Denmark/lander2/pamguard_michael/lander2_Denmark_database_annotated.sqlite3';
-        data(i).binaryfolder ='/Users/jdjm/Dropbox/SMRU_research/2026-27_CUMBIAH/landers/Denmark/lander2/pamguard_michael/pamguard/PAMBinary';
+        % from the lander folder, so it works wherever Dropbox is mounted
+        % (the ~/Library/CloudStorage/Dropbox path is not on every Mac)
+        data(i).sqlitedB = fullfile(denmarkdir, 'lander2', 'pamguard_michael', 'lander2_Denmark_database_annotated.sqlite3');
+        data(i).binaryfolder = fullfile(denmarkdir, 'lander2', 'pamguard_michael', 'pamguard', 'PAMBinary');
     end
     %%%%%
 end
@@ -70,7 +94,7 @@ dorecalc = recalculate || ~isfile(resultsfile);
 if ~dorecalc
     cached = load(resultsfile);
     dorecalc = ~isfield(cached, 'locstable') || ~isequal(cached.landers, landers) || ...
-        cached.depth ~= depth;
+        cached.depth ~= depth || (usepropoffset && (~isfield(cached, 'propoffsets') || ~isequal(cached.propoffsets, propoffsets)));
 end
 
 if dorecalc
@@ -85,7 +109,9 @@ if dorecalc
 
         %main location
         % results{i} = locateplatform(data(i), 'depth', depth, 'setlocation', setloc);
-        results{i} = locateplatform(data(i), 'depth', 17, 'gridlims', [-40 40], 'gridcenter', data(i).droplocation);
+        results{i} = locateplatform(data(i), 'depth', depth, 'gridlims', [-40 40], ...
+            'gridcenter', data(i).droplocation, 'propoffset', propoffsetarg, 'propagation', propagation);
+        locs(i).propoffset = results{i}.propoffset;
 
         for k = 1:numel(keep)
             locs(i).(keep{k}) = results{i}.(keep{k});
@@ -93,7 +119,8 @@ if dorecalc
     end
     %saved as a table, one row per lander
     locstable = struct2table(locs);
-    save(resultsfile, 'locstable', 'landers', 'depth', 'deployment');
+    save(resultsfile, 'locstable', 'landers', 'depth', 'deployment', 'usepropoffset', 'propoffsets', ...
+        'usepropagation', 'propagationtable');
 else
     locstable = cached.locstable;
     locs = table2struct(locstable);

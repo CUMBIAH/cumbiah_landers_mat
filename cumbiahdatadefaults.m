@@ -48,4 +48,10 @@ data.sensorbinaryfolder  = '';    % PAMBinary_sud_sensor (SoundTrap sensors)
 data.psfxfile            = '';    % PAMGuard configuration
 data.gpsfile             = '';    % vessel GPS track for this deployment trip
 
+% .mat file of the clicks of the porpoise tracks (CLICK_EVENTS, as
+% LOAD_EVENT_CLICKS returns them, and HYDROPHONES, the array as PAMGuard
+% has it). If it is set LOCALISEPORPOISES reads the tracks from it instead
+% of PORPOISEDB and the binary store, e.g. for simulated clicks.
+data.clicksfile          = '';
+
 end

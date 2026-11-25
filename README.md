@@ -194,5 +194,11 @@ Results go to `<lander super folder>/localisation`: `landers123_dep1_loctracks.m
 
 As well as the CUMBIAH library, soundnet and PAMGUARD this needs the CIBBRiNA `soundtrap_4c/localisation` code and the particle filter (`MATLAB/localisation`) on the path.
 
+The tracks are read with `load_event_clicks` (soundnet), without the waveforms. If a lander's record has `data.clicksfile` set, the tracks are read from that `.mat` file instead of the database and binary store. It holds `click_events`, as `load_event_clicks` returns them, and `hydrophones`, the array as PAMGuard has it.
+
+#### Testing with simulated tracks: `test_localise_simulated.m`
+
+`localise_porpoises/_test/test_localise_simulated.m` checks the whole chain against known answers. It puts three landers on a ~30 m triangle, each with its own heading, pitch, roll and clock offset, swims four animals around them in three encounters (two at the same time), and makes the clicks each lander would record: arrival time on the lander's clock, time delays with SNR-based errors, and bearings in the frame of the hydrophones, as PAMGuard has them. The clicks are saved as one `clicksfile` per lander and run through `localiseporpoises`. The test then checks the lander positions, the clock offsets, that every association is one animal, and the error of the localised tracks against the true ones, and saves a figure of both.
+
 ## License
 This library is open source but it is constantly evolving. It is for the research use of the CUMBIAH project but can be copied, adapted and used as per the open source license. We will not provide support outside of CUMBIAH.

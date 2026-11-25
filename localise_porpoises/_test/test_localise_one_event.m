@@ -38,7 +38,7 @@ landers    = [1 2 3];   % the landers of the array; the first is the reference c
 % the event: one porpoise, though the tracker splits it in two for a while
 tlims = [datetime(2024, 10, 20, 15, 46, 0), datetime(2024, 10, 20, 15, 50, 30)];
 
-relocalise = false;     % run the particle filter again even if the results are saved
+relocalise = true;     % run the particle filter again even if the results are saved
 
 % clicks with a true slant angle below this (deg) are left out - the
 % landers are on the seabed, so nothing can be heard from below them
@@ -57,10 +57,11 @@ propagationmatch = 'season';  % 'season' (time of year) or 'time' (date)
 % particle filter (porpoise)
 nruns = 5;              % runs of the particle filter
 particles = 1000;       % particles in each run
+likelihood = 'inverse';  % weight of a particle from its time delay chi2 (CETWEIGHTTD): Use 'inverse', not 'gaussian'. Inverse helps smooth non SNR errors -e.g. echoes etc. 
 
 % the movie
-makemovie = true;
-framestep = 1;          % time between frames (s)
+makemovie = true;       %make a mnovie of the event. 
+framestep = 1;          % time between frames (s)ell
 framerate = 10;         % frames per second of the movie
 bearingwindow = 2;      % bearings of the clicks of this many s before each frame (s)
 
@@ -81,6 +82,9 @@ addpath(strjoin(folders, pathsep));
 arrayfile = fullfile(getlandersuperfolder(country), ...
     sprintf('lander_array_locations_dep%d.mat', deployment));
 name = sprintf('test_%s', char(tlims(1), 'yyyyMMdd_HHmmss'));
+if ~raytrace
+    name = [name '_straight']; % kept apart from the ray traced run
+end
 outfolder = fullfile(getlandersuperfolder(country), 'localisation', name);
 
 %% Localise the event
@@ -92,7 +96,9 @@ if ~dorun
         ~isfield(saved, 'minslant') || ~isequal(saved.minslant, minslant) || ...
         ~isfield(saved, 'soundspeed') || ~isequal(saved.soundspeed, soundspeed) || ...
         ~isfield(saved, 'raytrace') || ~isequal(saved.raytrace, raytrace) || ...
-        ~isequal(saved.propagationmatch, propagationmatch);
+        ~isequal(saved.propagationmatch, propagationmatch) || ...
+        ~isfield(saved, 'likelihood') || ~isequal(saved.likelihood, likelihood) || ...
+        ~isequal(saved.particles, particles) || ~isequal(saved.nruns, nruns);
 end
 if dorun
     % one deployment record for each lander of the array
@@ -108,9 +114,10 @@ if dorun
     end
     [loctracks, info] = localiseporpoises(data, arrayfile, 'tlims', tlims, 'outfolder', outfolder, ...
         'nruns', nruns, 'particles', particles, 'minslant', minslant, ...
-        'soundspeed', soundspeed, 'propagation', propagation, 'propagationmatch', propagationmatch);
+        'soundspeed', soundspeed, 'propagation', propagation, 'propagationmatch', propagationmatch, ...
+        'likelihood', likelihood);
     save(resultsfile, 'loctracks', 'info', 'tlims', 'landers', 'minslant', 'soundspeed', ...
-        'raytrace', 'propagationmatch');
+        'raytrace', 'propagationmatch', 'likelihood', 'particles', 'nruns');
 else
     loctracks = saved.loctracks;
     info = saved.info;
@@ -265,6 +272,7 @@ if makemovie
             keys = [htrack(1), keys]; %#ok<AGROW>
             labels = [{'Porpoise track'}, labels]; %#ok<AGROW>
         end
+        
         % in a row underneath all the plots
         lgd = legend(ax1, keys, labels, 'FontSize', 11, 'NumColumns', 6);
         lgd.Layout.Tile = 'south';

@@ -32,13 +32,12 @@ function [loctracks, info] = localiseporpoises(landers, arrayfile, varargin)
 %
 %   TRACKS. The porpoise tracks are read back from the PAMGuard databases
 %   (LOAD_EVENT_CLICKS, without the waveforms), so anything an analyst has
-%   changed in the PAMGuard viewer is used. Only
-%   the tracks of this deployment are read (codes PP<deployment>...). The
-%   codes of CUMBIAH_MULTITRACK are per lander - PP1003AB01 on lander 1 has
-%   nothing to do with PP1003AB01 on lander 2 - so they are not used to
-%   match the tracks. Tracks during the boat calibration trials (events of
-%   type BOATTYPES in any of the landers' databases) are the boat, not
-%   porpoises, and are left out.
+%   changed in the PAMGuard viewer is used. Every event of type PORPTYPES
+%   (one per animal) that starts inside the lander's deployment is a track,
+%   whether CUMBIAH_MULTITRACK wrote it or it was marked by hand. Event
+%   comments and numbers are not used. Tracks during the boat calibration
+%   trials (events of type BOATTYPES in any of the landers' databases) are
+%   the boat, not porpoises, and are left out.
 %
 %   ENCOUNTERS. An array encounter is a run of tracks, on any of the
 %   landers, with no gap of more than ENCOUNTERGAP minutes. Encounters with
@@ -157,6 +156,7 @@ function [loctracks, info] = localiseporpoises(landers, arrayfile, varargin)
 %
 %     encounters and clocks
 %       'encountergap' - gap between tracks which ends an encounter (min) [5]
+%       'porptypes'    - event types of the porpoise tracks [{'pp'}]
 %       'boattypes'    - event types of the boat calibration trials [{'bc'}]
 %       'boatpad'      - time either side of a boat calibration left out (min) [2]
 %       'clockprior'   - clock of each lander - the first lander at the
@@ -248,6 +248,7 @@ p.addParameter('headingcorrection', []);
 p.addParameter('savefigs', true);
 p.addParameter('usecache', true);
 p.addParameter('encountergap', 5);
+p.addParameter('porptypes', {'pp'});
 p.addParameter('boattypes', {'bc'});
 p.addParameter('boatpad', 2);
 p.addParameter('clockprior', []);
@@ -415,7 +416,7 @@ for d = 1:nl
 end
 boat = boat + [-1 1]*opt.boatpad/1440;
 for d = 1:nl
-    T = load_tracks(dev(d).data, deployment, cachefolder, opt.usecache);
+    T = load_tracks(dev(d).data, deployment, opt.porptypes, cachefolder, opt.usecache);
     % the hydrophones as PAMGuard has them, rotated to east north up with
     % the orientation of the lander and put where it lies
     dev(d).hydrophones = (dev(d).rotm*T.hydrophones')' + dev(d).xyz;
@@ -909,14 +910,16 @@ function angles = pamguard_bearings(angles)
 angles = [-wrapToPi(angles(:,1) - pi/2), angles(:,2)];
 end
 
-function T = load_tracks(data, deployment, cachefolder, usecache)
-% the clicks of the tracks of a deployment (events with a code PP<d>nnnLLff)
-% of a lander, from its porpoise database and binary store
+function T = load_tracks(data, deployment, porptypes, cachefolder, usecache)
+% the clicks of the tracks of a deployment (events of type PORPTYPES which
+% start inside the deployment) of a lander, from its porpoise database and
+% binary store
 % (LOAD_EVENT_CLICKS) or, if DATA.CLICKSFILE is given, from that .mat file:
 %   t, angles, delays, tderr - time (datenum), angles (rad), time delays
 %          (s) and time delay error (s) of each click
 %   track - index of the track of each click
-%   code, tracklims - code and [start end] (datenum) of each track
+%   code, tracklims - label (the event comment, or 'event<UID>' if it has
+%          none) and [start end] (datenum) of each track
 %   hydrophones - [x y z] (m) of the hydrophones in PAMGuard's array frame
 if uses_clicksfile(data)
     S = load(data.clicksfile, 'click_events', 'hydrophones');
@@ -931,32 +934,42 @@ else
         q = load(cachefile);
         % the database has not changed since
         if isfield(q, 'T') && isfield(q.T, 'hydrophones') && q.dbdatenum == db.datenum && ...
-                strcmp(q.dbfile, data.porpoisedB)
+                strcmp(q.dbfile, data.porpoisedB) && isfield(q, 'porptypes') && ...
+                isequal(q.porptypes, porptypes)
             T = q.T;
             return
         end
     end
     fprintf('lander%d: loading tracks from %s (slow)\n', data.landernumber, db.name);
     E = load_event_clicks(data.porpoisedB, data.binaryfolder, [], [], 'waveforms', false, ...
-        'comment', sprintf('PP%d%%', deployment), 'verbose', false);
+        'verbose', false);
     hydrophones = read_pamguard_hydrophones(data.porpoisedB);
     source = data.porpoisedB;
 end
 
-% the tracks of this deployment
-codes = {};
-if ~isempty(E)
-    codes = strtrim({E.comment})';
+% the tracks of this deployment: porpoise events starting inside it
+indeployment = isfield(data, 'startTime') && isfield(data, 'endTime') && ...
+    ~isempty(data.startTime) && ~isempty(data.endTime);
+ok = false(numel(E), 1);
+for k = 1:numel(E)
+    ok(k) = ismember(strtrim(char(E(k).event_type)), porptypes) && ~isempty(E(k).date);
+    if ok(k) && indeployment
+        ok(k) = E(k).date >= datenum(data.startTime) && E(k).date < datenum(data.endTime);
+    end
 end
-tok = regexp(codes, '^PP(\d)\d{3}[A-Z]{2}\d{2}', 'tokens', 'once');
-ok = ~cellfun(@isempty, tok);
-ok(ok) = cellfun(@(t) str2double(t{1}), tok(ok)) == deployment;
 E = E(ok);
-codes = codes(ok);
+% a label for each track, for the printout and output only
+codes = cell(numel(E), 1);
+for k = 1:numel(E)
+    codes{k} = strtrim(char(E(k).comment));
+    if isempty(codes{k}) || strcmp(codes{k}, 'none')
+        codes{k} = sprintf('event%d', E(k).eventUID);
+    end
+end
 if isempty(codes)
     error('localiseporpoises:noTracks', ...
-        'No tracks of deployment %d (codes PP%d...) in %s - run CUMBIAH_MULTITRACK first.', ...
-        deployment, deployment, source);
+        'No %s events in deployment %d in %s - run CUMBIAH_MULTITRACK or mark the tracks first.', ...
+        strjoin(porptypes, '/'), deployment, source);
 end
 
 % the clicks of every track
@@ -996,7 +1009,7 @@ T.hydrophones = hydrophones;
 if usecache && ~uses_clicksfile(data)
     dbdatenum = db.datenum; %#ok<NASGU>
     dbfile = data.porpoisedB; %#ok<NASGU>
-    save(cachefile, 'T', 'dbdatenum', 'dbfile');
+    save(cachefile, 'T', 'dbdatenum', 'dbfile', 'porptypes');
 end
 end
 
